@@ -1,0 +1,37 @@
+{
+  "name": "verify-api",
+  "version": "0.1.0",
+  "description": "AI infrastructure claim verification — pay-per-query via x402.",
+  "repository": "https://github.com/drain54/verify-api",
+  "server": {
+    "type": "http",
+    "url": "https://slinging-chloride-chair.ngrok-free.dev/v1/verify",
+    "toolName": "mcp_verify-api_verify_ai_claim",
+    "x402Version": 1,
+    "network": "base",
+    "payTo": "0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98",
+    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "amount": "1000000",
+    "inputSchema": {
+      "type": "http",
+      "method": "POST",
+      "bodyType": "json",
+      "body": {
+        "query": "string",
+        "type": "enum(claim_verify|endpoint_check|pricing_check|region_check|error_diagnosis)",
+        "depth": "enum(standard|deep)",
+        "target_url": "string(optional)"
+      }
+    },
+    "outputSchema": {
+      "type": "json",
+      "example": {
+        "verdict": "TRUE|FALSE|PARTIALLY_TRUE|CHANGED|UNREACHABLE|BLOCKED|UNVERIFIED",
+        "answer": "evidence-backed answer",
+        "confidence": 0.91,
+        "sources": [{"url": "https://...", "type": "official", "supports": "..."}],
+        "caveats": []
+      }
+    }
+  }
+}
