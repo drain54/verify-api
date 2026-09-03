@@ -2,6 +2,7 @@
 # Wraps main.py pipeline behind x402 402 flow. NOT a framework — minimal adapter.
 import os, json, uuid, httpx, asyncio
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 from pathlib import Path
 _env = Path(__file__).parent / ".env"
 if _env.is_file():
@@ -58,6 +59,22 @@ def _payment_requirements(resource: str, amount: str) -> dict:
 @app.post("/v1/verify")
 async def paid_verify(request: Request):
     body = await request.json()
+    
+    # ponytail: allow free MCP initialize handshake for discovery/scanners
+    method = body.get("method") if isinstance(body, dict) else None
+    if method in ("initialize", "tools/list", "ping"):
+        return JSONResponse(content={
+            "jsonrpc": "2.0",
+            "id": body.get("id"),
+            "result": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {"tools": {"list": {"disabled": False}}},
+                "serverInfo": {"name": "verify-api", "version": "0.1.0"}
+            } if method == "initialize" else (
+                {"tools": [{"name": "verify_ai_claim", "description": "Verify an AI claim", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}]} if method == "tools/list" else {}
+            )
+        })
+    
     depth = (body.get("depth") or "standard").lower()
     amt = PRICES.get(depth, PRICES["standard"])
     resource = f"{request.url.scheme}://{request.url.netloc}/v1/verify"
@@ -122,6 +139,22 @@ async def paid_verify(request: Request):
     except Exception as e:
         return Response(content=json.dumps({"error":f"paid path crashed: {type(e).__name__}: {e}"}),
             status_code=500, headers={"Content-Type":"application/json"})
+
+@app.get("/.well-known/mcp/server-card.json")
+async def server_card():
+    return {
+        "name": "io.github.drain54/verify-api",
+        "title": "Verify API",
+        "description": "AI infrastructure claim verification — pay-per-query via x402.",
+        "version": "0.1.0",
+        "configSchema": {},
+        "remotes": [
+            {
+                "type": "streamable-http",
+                "url": "https://slinging-chloride-chair.ngrok-free.dev/v1/verify"
+            }
+        ]
+    }
 
 @app.get("/health")
 async def health():

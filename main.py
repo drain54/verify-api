@@ -189,6 +189,21 @@ async def verify(req: Req):
             "freshness":{"checked_at":verified_at,"max_age_hours":req.freshness_hours},
             "sources":sources,"caveats":[]}
 
+@app.get("/.well-known/mcp/server-card.json")
+async def server_card():
+    return {
+        "name": "io.github.drain54/verify-api",
+        "title": "Verify API",
+        "description": "AI infrastructure claim verification — pay-per-query via x402.",
+        "version": "0.1.0",
+        "remotes": [
+            {
+                "type": "streamable-http",
+                "url": "https://slinging-chloride-chair.ngrok-free.dev/v1/verify"
+            }
+        ]
+    }
+
 @app.get("/health")
 async def health():
     return {"ok":True}
