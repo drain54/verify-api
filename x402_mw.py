@@ -1,6 +1,7 @@
 # x402_mw.py — payment middleware (Step 3)
 # Wraps main.py pipeline behind x402 402 flow. NOT a framework — minimal adapter.
 import os, json, uuid, httpx, asyncio
+from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from pathlib import Path
@@ -22,6 +23,14 @@ NET = os.getenv("X402_NETWORK", "eip155:84532")  # CAIP-2 for reference only
 # PayAI V1 network string (hardcoded: "base" or "base-sepolia")
 V1_NET = "base-sepolia" if "84532" in NET else "base"
 PRICES = {"standard": "1000000", "deep": "3000000"}  # 0.01 / 0.03 USDC (6 decimals)
+LOG_PATH = Path(__file__).parent / "usage.jsonl"
+
+def _log(event: dict):
+    try:
+        with LOG_PATH.open("a") as f:
+            f.write(json.dumps({"ts": datetime.now(timezone.utc).isoformat(), **event}) + "\n")
+    except Exception:
+        pass
 
 app = FastAPI()
 
@@ -62,6 +71,7 @@ async def paid_verify(request: Request):
     
     # ponytail: allow free MCP initialize handshake for discovery/scanners
     method = body.get("method") if isinstance(body, dict) else None
+    _log({"path": "/v1/verify", "method": method or "unknown", "remote": request.client.host, "result": "free_handshake"})
     if method in ("initialize", "tools/list", "ping"):
         return JSONResponse(content={
             "jsonrpc": "2.0",
@@ -82,6 +92,7 @@ async def paid_verify(request: Request):
 
     # no payment -> 402
     if not payment_header:
+        _log({"path": "/v1/verify", "method": body.get("method") or "unknown", "remote": request.client.host, "result": "402_no_payment"})
         return Response(
             content=json.dumps(_payment_requirements(resource, amt)),
             status_code=402,
@@ -116,10 +127,10 @@ async def paid_verify(request: Request):
                 headers={"Content-Type":"application/json"})
             ver = vr.json()
             if not ver.get("isValid"):
+                _log({"path": "/v1/verify", "method": body.get("method") or "unknown", "remote": request.client.host, "result": "402_invalid_payment"})
                 return Response(content=json.dumps({"error":"invalid payment",
                     "invalidReason":ver.get("invalidReason","")}),
-                    status_code=402,
-                    headers={"Content-Type":"application/json"})
+                    status_code=402, headers={"Content-Type":"application/json"})
             # settle
             sr = await client.post(f"{FACILITATOR}/settle",
                 json={"paymentPayload":payload,
@@ -129,14 +140,17 @@ async def paid_verify(request: Request):
                 headers={"Content-Type":"application/json"})
             settled = sr.json()
             if not settled.get("success"):
+                _log({"path": "/v1/verify", "method": body.get("method") or "unknown", "remote": request.client.host, "result": "502_settle_failed"})
                 return Response(content=json.dumps({"error":"settle failed",
                     "errorReason":settled.get("errorReason","")}),
                     status_code=502, headers={"Content-Type":"application/json"})
         # payment ok -> run pipeline
         req = Req(**body)
         result = await verify(req)
+        _log({"path": "/v1/verify", "method": body.get("method") or "unknown", "remote": request.client.host, "result": "paid_ok"})
         return result
     except Exception as e:
+        _log({"path": "/v1/verify", "method": body.get("method") or "unknown", "remote": request.client.host, "result": "500_paid_crash", "error": f"{type(e).__name__}: {e}"})
         return Response(content=json.dumps({"error":f"paid path crashed: {type(e).__name__}: {e}"}),
             status_code=500, headers={"Content-Type":"application/json"})
 
