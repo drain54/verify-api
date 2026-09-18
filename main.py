@@ -1,7 +1,8 @@
 import os, json, time, uuid, asyncio, subprocess, httpx
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 # load .env if present (no dotenv dep)
@@ -18,7 +19,7 @@ app = FastAPI()
 # --- config (provider-agnostic: 1 env var each, no abstraction layer) ---
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 LLM_API_KEY  = os.getenv("LLM_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
-LLM_MODEL    = os.getenv("LLM_MODEL", "minimax/minimax-m3:free")
+LLM_MODEL    = os.getenv("LLM_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 SEARCH_BACKEND = os.getenv("SEARCH_BACKEND", "tinyfish")  # tinyfish | firecrawl | web_search
 
 VERDICTS = {"TRUE","FALSE","PARTIALLY_TRUE","CHANGED","UNREACHABLE","BLOCKED","UNVERIFIED"}
@@ -71,15 +72,14 @@ async def http_probe(url: str) -> dict:
 # --- search via tinyfish CLI (already installed, free) ---
 def search(query: str, n: int) -> list[dict]:
     if SEARCH_BACKEND == "tinyfish":
-        out = subprocess.run(["tinyfish","search","query",query],
-                             capture_output=True, text=True, timeout=60).stdout
         try:
+            out = subprocess.run(["tinyfish","search","query",query],
+                                 capture_output=True, text=True, timeout=60).stdout
             data = json.loads(out)
             return [{"url":r.get("url"),"title":r.get("title"),"type":"third_party"}
                     for r in data.get("results",[])][:n]
         except Exception:
             return []
-    # ponytail: firecrawl/web_search backends added when env switched
     return []
 
 # --- verdict from evidence (deterministic rule, NOT LLM guess) ---
@@ -132,14 +132,18 @@ def llm_answer(query: str, typ: str, sources: list[dict]) -> str:
             r = httpx.post(f"{LLM_BASE_URL}/chat/completions",
                            headers={"Authorization":f"Bearer {LLM_API_KEY}","Content-Type":"application/json"},
                            json=body, timeout=60)
-            res = r.json()["choices"][0]["message"]["content"].strip()
-            # keep answer sans VERDICT line; strip **bold** markers around ANSWER
-            out = "\n".join(l for l in res.splitlines()
-                            if not l.strip().upper().lstrip("*").startswith("VERDICT"))
-            out = out.replace("**ANSWER:**", "").replace("**ANSWER**", "")
-            if out.strip().upper().startswith("ANSWER"):
-                out = out.strip().split(":", 1)[-1].strip()
-            return out.strip()
+            data = r.json()
+            if "choices" in data and data["choices"]:
+                res = data["choices"][0]["message"]["content"].strip()
+                out = "\n".join(l for l in res.splitlines()
+                                if not l.strip().upper().lstrip("*").startswith("VERDICT"))
+                out = out.replace("**ANSWER:**", "").replace("**ANSWER**", "")
+                if out.strip().upper().startswith("ANSWER"):
+                    out = out.strip().split(":", 1)[-1].strip()
+                return out.strip()
+            elif "error" in data:
+                return f"(llm error: {data['error'].get('message', data['error'])})"
+            return f"(llm response error: {r.status_code})"
         except Exception as e:
             if attempt == 1:
                 return f"(llm error: {str(e)[:120]})"
@@ -199,10 +203,34 @@ async def server_card():
         "remotes": [
             {
                 "type": "streamable-http",
-                "url": "https://slinging-chloride-chair.ngrok-free.dev/v1/verify"
+                "url": "https://verify.drain54.my.id/v1/verify"
             }
         ]
     }
+
+# ponytail: path routing to provisioning service — coupled to verify-api lifecycle
+# MIGRATION TRIGGER: if verify-api restarts > 2x/month or uptime < 99%, move to cloudflared multi-tunnel (opsi 2)
+# Coupling: verify-api crash = provisioning unreachable until verify-api recovers
+PROVISIONING_URL = "http://127.0.0.1:8013"
+
+@app.api_route("/v1/test-accounts/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_provisioning(request: Request, path: str):
+    """Proxy all /v1/test-accounts/* requests to provisioning service."""
+    url = f"{PROVISIONING_URL}/v1/test-accounts/{path}"
+    body = await request.body()
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")}
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.request(
+                method=request.method,
+                url=url,
+                content=body,
+                headers=headers,
+                params=request.query_params,
+            )
+        return Response(content=resp.content, status_code=resp.status_code, headers=dict(resp.headers))
+    except Exception as e:
+        return Response(content=json.dumps({"error": f"provisioning unavailable: {type(e).__name__}", "detail": str(e)}), status_code=502, media_type="application/json")
 
 @app.get("/health")
 async def health():

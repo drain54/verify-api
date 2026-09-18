@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "server": {
     "type": "http",
-    "url": "https://slinging-chloride-chair.ngrok-free.dev/v1/verify",
+    "url": "https://verify.drain54.my.id/v1/verify",
     "toolName": "mcp_verify-api_verify_ai_claim",
     "x402Version": 1,
     "network": "base",

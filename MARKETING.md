@@ -4,7 +4,7 @@ Service name: **Verify API**
 Tagline: *AI infrastructure claim verification — pay-per-query.*
 Owner: drain54
 Wallet (payTo): `0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98`
-Endpoint: `https://slinging-chloride-chair.ngrok-free.dev/v1/verify`
+Endpoint: `https://verify.drain54.my.id/v1/verify`
 Protocol: x402 v1
 Network: Base (eip155:8453)
 Asset: USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
