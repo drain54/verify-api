@@ -184,23 +184,77 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-@app.post("/v1/verify")
-async def paid_verify(request: Request):
-    body = await request.json()
+def _mcp_rpc_response(body: dict):
     method = body.get("method") if isinstance(body, dict) else None
-    _log({"path": "/v1/verify", "method": method or "unknown", "remote": request.client.host, "result": "free_handshake"})
-    if method in ("initialize", "tools/list", "ping"):
-        return JSONResponse(content={
+    req_id = body.get("id") if isinstance(body, dict) else 1
+    if method == "initialize":
+        return {
             "jsonrpc": "2.0",
-            "id": body.get("id"),
+            "id": req_id,
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {"list": {"disabled": False}}},
-                "serverInfo": {"name": "verify-api", "version": "0.1.0"}
-            } if method == "initialize" else (
-                {"tools": [{"name": "verify_ai_claim", "description": "Verify an AI claim", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}]} if method == "tools/list" else {}
-            )
-        })
+                "serverInfo": {"name": "verify-api", "version": "0.3.0"}
+            }
+        }
+    elif method == "tools/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "tools": [
+                    {
+                        "name": "verify_ai_claim",
+                        "description": "Verify an AI model claim or infrastructure assertion via x402 payment.",
+                        "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}
+                    },
+                    {
+                        "name": "solve_captcha",
+                        "description": "Solve CAPTCHA challenge (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare).",
+                        "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sitekey": {"type": "string"}, "url": {"type": "string"}}, "required": ["type", "sitekey", "url"]}
+                    }
+                ]
+            }
+        }
+    elif method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+    return None
+
+@app.get("/")
+@app.get("/mcp")
+@app.get("/v1/verify")
+async def root_mcp_info():
+    return JSONResponse(content={
+        "name": "io.github.drain54/verify-api",
+        "status": "ok",
+        "mcp_endpoint": "https://verify.drain54.my.id/v1/verify",
+        "card": "https://verify.drain54.my.id/.well-known/mcp/server-card.json"
+    })
+
+@app.post("/")
+@app.post("/mcp")
+async def root_mcp_post(request: Request):
+    try:
+        body = await request.json()
+        resp = _mcp_rpc_response(body)
+        if resp:
+            return JSONResponse(content=resp)
+    except Exception:
+        pass
+    return JSONResponse(content={"status": "ok", "message": "Verify API MCP endpoint."})
+
+@app.post("/v1/verify")
+async def paid_verify(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    method = body.get("method") if isinstance(body, dict) else None
+    remote_ip = request.client.host if request.client else "unknown"
+    _log({"path": "/v1/verify", "method": method or "unknown", "remote": remote_ip, "result": "free_handshake"})
+    mcp_resp = _mcp_rpc_response(body)
+    if mcp_resp:
+        return JSONResponse(content=mcp_resp)
     depth = (body.get("depth") or "standard").lower()
     amt = PRICES.get(depth, PRICES["standard"])
     resource = _get_resource(request)
