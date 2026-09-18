@@ -38,10 +38,10 @@ Log: `/home/server1/verify-api/usage.jsonl`
 
 ## Marketplace listings
 
-- PayAI Bazaar — listed
-- Glama — submitted
-- MCP Registry — published (`io.github.drain54/verify-api` v0.1.0)
-- Smithery — connected
+- **PayAI Bazaar** — listed (`https://bazaar.payai.network`)
+- **Glama** — submitted & active (`https://glama.ai/mcp/servers` — `verify-api`)
+- **MCP Registry** — published (`io.github.drain54/verify-api` v0.3.0)
+- **Smithery** — connected (`https://smithery.ai/servers/indradarmawan87/verify-api`)
 
 ## Config
 

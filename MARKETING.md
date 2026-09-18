@@ -61,4 +61,4 @@ Verify API answers whether an AI model, API, or infrastructure claim is still tr
 ## Compliance / buyer note
 - USDC on Base mainnet
 - Facilitator: `https://facilitator.payai.network`
-- Discovery: listed on PayAI Bazaar `/discovery/resources`
+- Discovery: listed on PayAI Bazaar (`/discovery/resources`), Glama, Smithery, and Official MCP Registry (`io.github.drain54/verify-api`)
