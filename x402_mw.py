@@ -198,6 +198,7 @@ TOOLS_DEFINITION = [
                 "depth": {
                     "type": "string",
                     "enum": ["standard", "deep"],
+                    "default": "standard",
                     "description": "Verification depth: 'standard' (0.01 USDC) or 'deep' (0.03 USDC)."
                 }
             },
@@ -226,7 +227,37 @@ TOOLS_DEFINITION = [
             "required": ["verdict", "answer", "confidence", "sources"]
         },
         "annotations": {
-            "readOnlyHint": False,
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True
+        }
+    },
+    {
+        "name": "check_endpoint_health",
+        "description": "Probe and verify the reachability, HTTP status code, latency, and operational health of an AI API endpoint or web service. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Use to check if a specific API URL or endpoint is online, responding, or returning 5xx/402 errors.\nWhen NOT to use: Do NOT use for general domain WHOIS or DNS record lookups.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The target API or service endpoint URL to probe (e.g., 'https://api.example.com/v1/chat')."
+                }
+            },
+            "required": ["url"]
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "verdict": {"type": "string", "enum": ["TRUE", "UNREACHABLE", "BLOCKED"], "description": "Reachability status verdict"},
+                "http_status": {"type": "integer", "description": "HTTP status code returned by the target endpoint"},
+                "latency_ms": {"type": "integer", "description": "Response latency in milliseconds"},
+                "checked_at": {"type": "string", "description": "ISO 8601 timestamp of the check"}
+            },
+            "required": ["verdict", "http_status", "latency_ms"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
             "destructiveHint": False,
             "idempotentHint": True
         }
@@ -267,6 +298,32 @@ TOOLS_DEFINITION = [
             "readOnlyHint": False,
             "destructiveHint": False,
             "idempotentHint": False
+        }
+    },
+    {
+        "name": "get_captcha_pricing",
+        "description": "Retrieve current x402 pricing per 1,000 CAPTCHA solves across all supported types (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare). Free endpoint.\n\nWhen to use: Use before calling solve_captcha to check current rates and payment requirements.\nWhen NOT to use: Do NOT use to submit or solve CAPTCHA challenges.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "pricing": {
+                    "type": "object",
+                    "description": "Map of CAPTCHA type to cost in USDC atomic units per 1,000 solves"
+                },
+                "currency": {"type": "string", "description": "Payment currency (USDC)"},
+                "network": {"type": "string", "description": "Target blockchain network (Base)"}
+            },
+            "required": ["pricing", "currency", "network"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True
         }
     }
 ]
