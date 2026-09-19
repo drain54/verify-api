@@ -184,6 +184,93 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+TOOLS_DEFINITION = [
+    {
+        "name": "verify_ai_claim",
+        "description": "Verify whether an AI model, API provider, pricing claim, or infrastructure assertion is true today using live web evidence. Returns deterministic verdicts (TRUE, FALSE, PARTIALLY_TRUE, UNREACHABLE, UNVERIFIED) with cited sources and confidence scores. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Fact-checking an AI provider's claims, pricing, or model availability.\nWhen NOT to use: Do NOT use for general open-ended web search, coding assistance, or non-AI claim verification.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The specific AI infrastructure claim or assertion to verify (e.g., 'Is GLM-5.3 Flash free on ZenMux?')."
+                },
+                "depth": {
+                    "type": "string",
+                    "enum": ["standard", "deep"],
+                    "description": "Verification depth: 'standard' (0.01 USDC) or 'deep' (0.03 USDC)."
+                }
+            },
+            "required": ["query"]
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Unique verification record ID"},
+                "verdict": {"type": "string", "enum": ["TRUE", "FALSE", "PARTIALLY_TRUE", "CHANGED", "UNREACHABLE", "BLOCKED", "UNVERIFIED"], "description": "Deterministic evidence-backed verdict"},
+                "answer": {"type": "string", "description": "Detailed explanation backed by fresh sources"},
+                "confidence": {"type": "number", "description": "Confidence score between 0.0 and 1.0"},
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string", "description": "Source URL"},
+                            "title": {"type": "string", "description": "Source page title"},
+                            "type": {"type": "string", "description": "Source type (official, third_party, community)"}
+                        }
+                    },
+                    "description": "Fresh evidence sources used for verification"
+                }
+            },
+            "required": ["verdict", "answer", "confidence", "sources"]
+        },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True
+        }
+    },
+    {
+        "name": "solve_captcha",
+        "description": "Solve web CAPTCHA challenges (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare) and return a valid solution token. Requires x402 payment on Base.\n\nWhen to use: Use when an agent encounters a bot wall or CAPTCHA challenge during automated web workflows.\nWhen NOT to use: Do NOT use for non-CAPTCHA auth, 2FA/OTP codes, or general login forms.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["turnstile", "hcaptcha", "recaptcha", "arkose", "cloudflare"],
+                    "description": "The specific type of CAPTCHA challenge encountered on the target page."
+                },
+                "sitekey": {
+                    "type": "string",
+                    "description": "The CAPTCHA sitekey parameter extracted from the target page DOM or iframe."
+                },
+                "url": {
+                    "type": "string",
+                    "description": "The full target page URL where the CAPTCHA challenge is hosted."
+                }
+            },
+            "required": ["type", "sitekey", "url"]
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "solved": {"type": "boolean", "description": "Whether the CAPTCHA challenge was successfully solved"},
+                "token": {"type": "string", "description": "The resulting CAPTCHA response token to submit to the form"},
+                "method": {"type": "string", "description": "Solving method or backend engine used"},
+                "elapsed": {"type": "number", "description": "Time taken in seconds to solve the challenge"}
+            },
+            "required": ["solved", "token"]
+        },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False
+        }
+    }
+]
+
 def _mcp_rpc_response(body: dict):
     method = body.get("method") if isinstance(body, dict) else None
     req_id = body.get("id") if isinstance(body, dict) else 1
@@ -202,18 +289,7 @@ def _mcp_rpc_response(body: dict):
             "jsonrpc": "2.0",
             "id": req_id,
             "result": {
-                "tools": [
-                    {
-                        "name": "verify_ai_claim",
-                        "description": "Verify an AI model claim or infrastructure assertion via x402 payment.",
-                        "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}
-                    },
-                    {
-                        "name": "solve_captcha",
-                        "description": "Solve CAPTCHA challenge (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare).",
-                        "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sitekey": {"type": "string"}, "url": {"type": "string"}}, "required": ["type", "sitekey", "url"]}
-                    }
-                ]
+                "tools": TOOLS_DEFINITION
             }
         }
     elif method == "ping":
@@ -378,53 +454,7 @@ async def server_card():
         "remotes": [
             {"type": "streamable-http", "url": "https://verify.drain54.my.id"}
         ],
-        "tools": [
-            {
-                "name": "verify_ai_claim",
-                "description": "Verify an AI model claim or infrastructure assertion via x402 payment.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "The AI claim or assertion to verify"},
-                        "depth": {"type": "string", "enum": ["standard", "deep"], "description": "Verification depth (standard or deep)"}
-                    },
-                    "required": ["query"]
-                },
-                "annotations": {
-                    "readOnlyHint": False,
-                    "destructiveHint": False,
-                    "idempotentHint": True
-                }
-            },
-            {
-                "name": "solve_captcha",
-                "description": "Solve CAPTCHA challenge (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare). Requires x402 payment on Base.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"type": "string", "enum": ["turnstile", "hcaptcha", "recaptcha", "arkose", "cloudflare"], "description": "CAPTCHA type to solve"},
-                        "sitekey": {"type": "string", "description": "CAPTCHA site key"},
-                        "url": {"type": "string", "description": "Target page URL"}
-                    },
-                    "required": ["type", "sitekey", "url"]
-                },
-                "outputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "solved": {"type": "boolean", "description": "Whether CAPTCHA was solved"},
-                        "token": {"type": "string", "description": "CAPTCHA solution token"},
-                        "method": {"type": "string", "description": "Solve method used"},
-                        "elapsed": {"type": "number", "description": "Time in seconds"},
-                        "error": {"type": "string", "description": "Error message if failed"}
-                    }
-                },
-                "annotations": {
-                    "readOnlyHint": False,
-                    "destructiveHint": False,
-                    "idempotentHint": False
-                }
-            }
-        ],
+        "tools": TOOLS_DEFINITION,
         "pricing": {
             "model": "pay-per-use",
             "currency": "USDC",
