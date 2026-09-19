@@ -355,6 +355,13 @@ async def icon():
         media_type="image/svg+xml",
     )
 
+@app.get("/.well-known/glama.json")
+async def glama_verification():
+    return {
+        "$schema": "https://glama.ai/mcp/schemas/connector.json",
+        "claim": "glama_claim_LB7BptXsCj5cX4_aN0kLEMNZVZqQiPyD"
+    }
+
 @app.get("/.well-known/mcp/server-card.json")
 async def server_card():
     return {
