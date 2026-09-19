@@ -445,6 +445,20 @@ async def server_card():
         "title": "Verify API",
         "description": "AI infrastructure claim verification + CAPTCHA solving — pay-per-use via x402. Verify AI model claims and solve Turnstile, hCaptcha, reCAPTCHA, Arkose, Cloudflare.",
         "version": "0.3.0",
+        "license": "MIT",
+        "author": {
+            "name": "drain54",
+            "url": "https://github.com/drain54",
+            "email": "indradarmawan87@gmail.com"
+        },
+        "publisher": {
+            "name": "drain54",
+            "url": "https://github.com/drain54"
+        },
+        "support": {
+            "url": "https://github.com/drain54/verify-api/issues",
+            "email": "indradarmawan87@gmail.com"
+        },
         "homepage": "https://smithery.ai/servers/indradarmawan87/verify-api",
         "repository": {
             "type": "git",
