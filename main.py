@@ -69,18 +69,68 @@ async def http_probe(url: str) -> dict:
         return {"verdict":"UNREACHABLE","http_status":0,"latency_ms":int((time.time()-t0)*1000),
                 "checked_at":datetime.now(timezone.utc).isoformat(),"error":str(e)[:120]}
 
-# --- search via tinyfish CLI (already installed, free) ---
+# --- multi-backend search chain (tinyfish -> ddgs -> jina) ---
 def search(query: str, n: int) -> list[dict]:
-    if SEARCH_BACKEND == "tinyfish":
+    results = []
+    
+    # 1. TinyFish CLI (if TINYFISH_API_KEY is configured)
+    if os.getenv("TINYFISH_API_KEY"):
         try:
-            out = subprocess.run(["tinyfish","search","query",query],
-                                 capture_output=True, text=True, timeout=60).stdout
+            out = subprocess.run(["tinyfish", "search", "query", query],
+                                 capture_output=True, text=True, timeout=15).stdout
             data = json.loads(out)
-            return [{"url":r.get("url"),"title":r.get("title"),"type":"third_party"}
-                    for r in data.get("results",[])][:n]
+            res = [{"url": r.get("url"), "title": r.get("title", query), "supports": r.get("snippet", ""), "type": "official" if "official" in (r.get("url") or "") else "third_party"}
+                   for r in data.get("results", []) if r.get("url")]
+            if res:
+                return res[:n]
         except Exception:
-            return []
-    return []
+            pass
+
+    # 2. DDGS Search (ddgs)
+    try:
+        from ddgs import DDGS
+        ddg_list = list(DDGS().text(query, max_results=n))
+        for r in ddg_list:
+            url = r.get("href") or r.get("url")
+            if url:
+                is_official = any(d in url.lower() for d in ["github.com", "official", "docs.", "openrouter.ai", "zenmux", "payai.network"])
+                results.append({
+                    "url": url,
+                    "title": r.get("title", query),
+                    "supports": r.get("body", "")[:250],
+                    "type": "official" if is_official else "third_party"
+                })
+        if results:
+            return results[:n]
+    except Exception:
+        pass
+
+    # 3. Jina Reader Search Fallback
+    try:
+        import urllib.parse
+        r = httpx.get(f"https://s.jina.ai/{urllib.parse.quote(query)}", timeout=10, headers={"User-Agent": "verify-api/0.3"})
+        if r.status_code == 200:
+            lines = r.text.splitlines()
+            current_title = ""
+            for line in lines:
+                line = line.strip()
+                if line.startswith("Title:"):
+                    current_title = line[6:].strip()
+                elif line.startswith("URL Source:") or line.startswith("URL:"):
+                    url = line.split(":", 1)[-1].strip()
+                    if url.startswith("http"):
+                        results.append({
+                            "url": url,
+                            "title": current_title or query,
+                            "supports": f"Source page from Jina search for {query}",
+                            "type": "third_party"
+                        })
+            if results:
+                return results[:n]
+    except Exception:
+        pass
+
+    return results
 
 # --- verdict from evidence (deterministic rule, NOT LLM guess) ---
 NEG = ["tidak","bukan","tolak","reject","wajib","required","expired","hilang",
