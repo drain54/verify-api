@@ -187,19 +187,23 @@ app = FastAPI(lifespan=lifespan)
 TOOLS_DEFINITION = [
     {
         "name": "verify_ai_claim",
-        "description": "Verify whether an AI model, API provider, pricing claim, or infrastructure assertion is true today using live web evidence. Returns deterministic verdicts (TRUE, FALSE, PARTIALLY_TRUE, UNREACHABLE, UNVERIFIED) with cited sources and confidence scores. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Fact-checking an AI provider's claims, pricing, or model availability.\nWhen NOT to use: Do NOT use for general open-ended web search, coding assistance, or non-AI claim verification.",
+        "description": "Verify whether an AI model, API provider, pricing claim, or infrastructure assertion is true today using live web evidence. Returns deterministic verdicts (TRUE, FALSE, PARTIALLY_TRUE, UNREACHABLE, UNVERIFIED) with cited sources and confidence scores. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Fact-checking an AI provider's claims, pricing, or model availability.\nWhen NOT to use: Do NOT use for general open-ended web search, coding assistance, or non-AI claim verification.\n\nParameters:\n- `query` (string, required): The exact claim or assertion to verify (5-500 chars), e.g. 'Is GLM-5.3 Flash free on ZenMux?'.\n- `depth` (string, optional, default 'standard'): Verification depth. 'standard' executes fast single-pass search (0.01 USDC); 'deep' conducts multi-source cross-examination (0.03 USDC).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The specific AI infrastructure claim or assertion to verify (e.g., 'Is GLM-5.3 Flash free on ZenMux?')."
+                    "minLength": 5,
+                    "maxLength": 500,
+                    "description": "The specific AI infrastructure claim or assertion to verify.",
+                    "examples": ["Is GLM-5.3 Flash free on ZenMux?", "Does OpenRouter still offer free tier models?"]
                 },
                 "depth": {
                     "type": "string",
                     "enum": ["standard", "deep"],
                     "default": "standard",
-                    "description": "Verification depth: 'standard' (0.01 USDC) or 'deep' (0.03 USDC)."
+                    "description": "Verification depth: 'standard' (0.01 USDC) or 'deep' (0.03 USDC).",
+                    "examples": ["standard", "deep"]
                 }
             },
             "required": ["query"]
@@ -234,14 +238,17 @@ TOOLS_DEFINITION = [
     },
     {
         "name": "check_endpoint_health",
-        "description": "Probe and verify the reachability, HTTP status code, latency, and operational health of an AI API endpoint or web service. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Use to check if a specific API URL or endpoint is online, responding, or returning 5xx/402 errors.\nWhen NOT to use: Do NOT use for general domain WHOIS or DNS record lookups.",
+        "description": "Probe and verify the reachability, HTTP status code, latency, and operational health of an AI API endpoint or web service. Follows redirects with a 15-second timeout. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Check if a specific API URL or model endpoint is online, responding, or returning 5xx/402 errors.\nWhen NOT to use: Do NOT use for general domain WHOIS or DNS record lookups.\n\nParameters:\n- `url` (string, required): Target HTTP/HTTPS endpoint URL to probe (8-1000 chars), e.g. 'https://api.openai.com/v1/models'.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "url": {
                     "type": "string",
                     "format": "uri",
-                    "description": "The target API or service endpoint URL to probe (e.g., 'https://api.example.com/v1/chat')."
+                    "minLength": 8,
+                    "maxLength": 1000,
+                    "description": "The target API or service endpoint URL to probe.",
+                    "examples": ["https://openrouter.ai/api/v1/models", "https://api.together.xyz/v1/health"]
                 }
             },
             "required": ["url"]
@@ -264,22 +271,30 @@ TOOLS_DEFINITION = [
     },
     {
         "name": "solve_captcha",
-        "description": "Solve web CAPTCHA challenges (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare) and return a valid solution token. Requires x402 payment on Base.\n\nWhen to use: Use when an agent encounters a bot wall or CAPTCHA challenge during automated web workflows.\nWhen NOT to use: Do NOT use for non-CAPTCHA auth, 2FA/OTP codes, or general login forms.",
+        "description": "Solve web CAPTCHA challenges (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare) and return a valid solution token. Automatically retries once on failure without double charging. Requires x402 payment on Base.\n\nWhen to use: Use when an agent encounters a bot wall or CAPTCHA challenge during automated web workflows.\nWhen NOT to use: Do NOT use for non-CAPTCHA auth, 2FA/OTP codes, or general login forms.\n\nParameters:\n- `type` (string, required): CAPTCHA type ('turnstile', 'hcaptcha', 'recaptcha', 'arkose', 'cloudflare').\n- `sitekey` (string, required): Public sitekey extracted from the target page DOM.\n- `url` (string, required): Full target webpage URL hosting the challenge.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "type": {
                     "type": "string",
                     "enum": ["turnstile", "hcaptcha", "recaptcha", "arkose", "cloudflare"],
-                    "description": "The specific type of CAPTCHA challenge encountered on the target page."
+                    "description": "The specific type of CAPTCHA challenge encountered on the target page.",
+                    "examples": ["turnstile", "recaptcha", "hcaptcha"]
                 },
                 "sitekey": {
                     "type": "string",
-                    "description": "The CAPTCHA sitekey parameter extracted from the target page DOM or iframe."
+                    "minLength": 5,
+                    "maxLength": 256,
+                    "description": "The CAPTCHA sitekey parameter extracted from the target page DOM or iframe.",
+                    "examples": ["0x4AAAAAAAx..."]
                 },
                 "url": {
                     "type": "string",
-                    "description": "The full target page URL where the CAPTCHA challenge is hosted."
+                    "format": "uri",
+                    "minLength": 8,
+                    "maxLength": 1000,
+                    "description": "The full target page URL where the CAPTCHA challenge is hosted.",
+                    "examples": ["https://example.com/login"]
                 }
             },
             "required": ["type", "sitekey", "url"]
@@ -302,7 +317,7 @@ TOOLS_DEFINITION = [
     },
     {
         "name": "get_captcha_pricing",
-        "description": "Retrieve current x402 pricing per 1,000 CAPTCHA solves across all supported types (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare). Free endpoint.\n\nWhen to use: Use before calling solve_captcha to check current rates and payment requirements.\nWhen NOT to use: Do NOT use to submit or solve CAPTCHA challenges.",
+        "description": "Retrieve current x402 pricing per 1,000 CAPTCHA solves across all supported types (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare). Free endpoint with zero parameters.\n\nWhen to use: Check current rates and atomic USDC requirements before calling solve_captcha.\nWhen NOT to use: Do NOT use to submit or solve CAPTCHA challenges.",
         "inputSchema": {
             "type": "object",
             "properties": {},
