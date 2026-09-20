@@ -48,5 +48,41 @@ async def verify_ai_claim(query: str, type: str = "claim_verify",
                 return json.dumps({"error": str(e)[:200]})
     return json.dumps({"error": "no backend reachable"})
 
+@mcp.tool()
+async def read_web_page(url: str, include_links: bool = True, include_images: bool = False) -> str:
+    """Extract clean, readable Markdown and metadata from any public webpage for LLM ingestion.
+    Strips ads, popups, and navigational boilerplate.
+
+    Args:
+        url: target webpage URL (e.g. 'https://news.ycombinator.com')
+        include_links: whether to preserve markdown hyperlinks (default True)
+        include_images: whether to preserve markdown image tags (default False)
+    Returns JSON: {url, title, description, content, length, estimated_tokens, elapsed_ms}
+    """
+    body = {"url": url, "include_links": include_links, "include_images": include_images}
+    for base in (PAID_API, "http://127.0.0.1:8012"):
+        try:
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.post(f"{base}/v1/read", json=body)
+            if r.status_code == 200:
+                return r.text
+            if r.status_code == 402:
+                # If hit direct local reader without payment, fall back to direct reader_backend
+                try:
+                    from reader_backend import extract_url
+                    res = await extract_url(url, include_links=include_links, include_images=include_images)
+                    return json.dumps(res)
+                except Exception:
+                    continue
+            return json.dumps({"error": f"HTTP {r.status_code}", "detail": r.text[:200]})
+        except Exception as e:
+            pass
+    try:
+        from reader_backend import extract_url
+        res = await extract_url(url, include_links=include_links, include_images=include_images)
+        return json.dumps(res)
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
+
 if __name__ == "__main__":
     mcp.run()

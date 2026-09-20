@@ -14,6 +14,7 @@ if _env.is_file():
             os.environ.setdefault(*line.split("=", 1))
 
 from main import verify, Req  # noqa: E402
+from reader_backend import extract_url  # noqa: E402
 
 FACILITATOR = os.getenv("X402_FACILITATOR_URL", "https://facilitator.payai.network")
 WALLET = os.getenv("X402_WALLET", "")
@@ -340,6 +341,52 @@ TOOLS_DEFINITION = [
             "destructiveHint": False,
             "idempotentHint": True
         }
+    },
+    {
+        "name": "read_web_page",
+        "description": "Extract clean, readable Markdown and metadata from any public webpage for LLM ingestion, stripping ads, popups, and navigational clutter. Returns clean markdown, title, description, character count, and estimated tokens. Requires x402 micropayment (0.005 USDC on Base).\n\nWhen to use: Ingesting articles, blog posts, documentation, or news pages into LLM context.\nWhen NOT to use: Do NOT use for raw binary files (PDF/images), authenticated pages behind a login, or single-page apps that require heavy JavaScript rendering.\n\nParameters:\n- `url` (string, required): Full target webpage URL (e.g. 'https://news.ycombinator.com').\n- `include_links` (boolean, optional, default true): Whether to preserve markdown hyperlinks.\n- `include_images` (boolean, optional, default false): Whether to preserve image markdown links.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 8,
+                    "maxLength": 1000,
+                    "description": "Full target webpage URL to extract markdown from.",
+                    "examples": ["https://news.ycombinator.com", "https://en.wikipedia.org/wiki/Artificial_intelligence"]
+                },
+                "include_links": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Preserve markdown hyperlinks."
+                },
+                "include_images": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Preserve markdown image tags."
+                }
+            },
+            "required": ["url"]
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Target webpage URL"},
+                "title": {"type": "string", "description": "Extracted page title"},
+                "description": {"type": "string", "description": "Extracted meta description"},
+                "content": {"type": "string", "description": "Clean extracted Markdown content"},
+                "length": {"type": "integer", "description": "Content length in characters"},
+                "estimated_tokens": {"type": "integer", "description": "Estimated LLM tokens (~len/4)"},
+                "elapsed_ms": {"type": "integer", "description": "Extraction time in milliseconds"}
+            },
+            "required": ["url", "content", "length"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True
+        }
     }
 ]
 
@@ -496,6 +543,49 @@ async def solve_captcha(request: Request):
     status_code = 200 if result.get("solved") else 408 if "timed out" in result.get("error", "") else 500
     return JSONResponse(content=result, status_code=status_code)
 
+@app.post("/v1/read")
+async def read_page(request: Request):
+    """Extract clean Markdown from a webpage for LLM ingestion with x402 payment."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    url = body.get("url")
+    if not url:
+        return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
+    
+    amount = "5000"  # 0.005 USDC
+    resource = _get_resource(request)
+    description = "Web-to-Markdown LLM Reader — clean markdown extraction (0.005 USDC)."
+    
+    payment_header = request.headers.get("X-PAYMENT")
+    remote_ip = request.client.host if request.client else "unknown"
+    if not payment_header:
+        _log({"path": "/v1/read", "url": url[:60], "remote": remote_ip, "result": "402_no_payment"})
+        return Response(
+            content=json.dumps(_payment_requirements(resource, amount, description)),
+            status_code=402,
+            headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
+        )
+    
+    try:
+        paid, reason = await _verify_payment(request, amount, description)
+        if not paid:
+            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, description)}
+            if reason:
+                detail["invalidReason"] = reason
+            return JSONResponse(content=detail, status_code=402)
+    except Exception as e:
+        _log({"path": "/v1/read", "url": url[:60], "remote": remote_ip, "result": "500_payment_error", "error": str(e)})
+        return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)
+    
+    include_links = body.get("include_links", True)
+    include_images = body.get("include_images", False)
+    result = await extract_url(url, include_links=include_links, include_images=include_images)
+    _log({"path": "/v1/read", "url": url[:60], "remote": remote_ip, "result": "paid_ok"})
+    return JSONResponse(content=result)
+
 @app.get("/icon.svg")
 async def icon():
     return Response(
@@ -515,8 +605,8 @@ async def server_card():
     return {
         "name": "io.github.drain54/verify-api",
         "title": "Verify API",
-        "description": "AI infrastructure claim verification + CAPTCHA solving — pay-per-use via x402. Verify AI model claims and solve Turnstile, hCaptcha, reCAPTCHA, Arkose, Cloudflare.",
-        "version": "0.3.0",
+        "description": "AI infra claim verification + Web-to-Markdown LLM Reader + CAPTCHA solving — pay-per-use via x402 on Base USDC.",
+        "version": "0.4.0",
         "license": "MIT",
         "author": {
             "name": "drain54",
