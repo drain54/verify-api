@@ -84,5 +84,81 @@ async def read_web_page(url: str, include_links: bool = True, include_images: bo
     except Exception as e:
         return json.dumps({"error": str(e)[:200]})
 
+@mcp.tool()
+async def search_web(query: str, limit: int = 5) -> str:
+    """Execute live web searches using multi-engine chain without monthly subscriptions.
+
+    Args:
+        query: search query
+        limit: max results (default 5)
+    Returns JSON: {query, results, count}
+    """
+    body = {"query": query, "limit": limit}
+    for base in (PAID_API, "http://127.0.0.1:8012"):
+        try:
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.post(f"{base}/v1/search", json=body)
+            if r.status_code == 200:
+                return r.text
+        except Exception:
+            pass
+    try:
+        from main import search
+        results = search(query, limit)
+        return json.dumps({"query": query, "results": results, "count": len(results)})
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
+
+@mcp.tool()
+async def extract_json_from_web(url: str, schema: dict, instructions: str = "") -> str:
+    """Extract structured JSON matching a schema directly from any webpage.
+
+    Args:
+        url: target webpage URL
+        schema: dictionary of field specifications or list of field names
+        instructions: optional formatting instructions
+    Returns JSON: {url, title, data, elapsed_ms}
+    """
+    body = {"url": url, "schema": schema, "instructions": instructions}
+    for base in (PAID_API, "http://127.0.0.1:8012"):
+        try:
+            async with httpx.AsyncClient(timeout=45) as c:
+                r = await c.post(f"{base}/v1/extract-json", json=body)
+            if r.status_code == 200:
+                return r.text
+        except Exception:
+            pass
+    try:
+        from json_extractor import extract_structured_json
+        res = await extract_structured_json(url, schema, instructions)
+        return json.dumps(res)
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
+
+@mcp.tool()
+async def fetch_stealth_web(url: str, custom_headers: dict | None = None) -> str:
+    """Fetch webpage HTML with modern browser TLS and header impersonation to bypass bot protection.
+
+    Args:
+        url: target webpage URL
+        custom_headers: optional HTTP headers dict
+    Returns JSON: {url, http_status, title, challenge_detected, challenge_type, html, elapsed_ms}
+    """
+    body = {"url": url, "custom_headers": custom_headers}
+    for base in (PAID_API, "http://127.0.0.1:8012"):
+        try:
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.post(f"{base}/v1/fetch-stealth", json=body)
+            if r.status_code == 200:
+                return r.text
+        except Exception:
+            pass
+    try:
+        from stealth_fetcher import fetch_stealth
+        res = await fetch_stealth(url, custom_headers=custom_headers)
+        return json.dumps(res)
+    except Exception as e:
+        return json.dumps({"error": str(e)[:200]})
+
 if __name__ == "__main__":
     mcp.run()

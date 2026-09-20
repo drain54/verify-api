@@ -13,8 +13,10 @@ if _env.is_file():
         if line and not line.startswith("#") and "=" in line:
             os.environ.setdefault(*line.split("=", 1))
 
-from main import verify, Req  # noqa: E402
+from main import verify, Req, search  # noqa: E402
 from reader_backend import extract_url  # noqa: E402
+from json_extractor import extract_structured_json  # noqa: E402
+from stealth_fetcher import fetch_stealth  # noqa: E402
 
 FACILITATOR = os.getenv("X402_FACILITATOR_URL", "https://facilitator.payai.network")
 WALLET = os.getenv("X402_WALLET", "")
@@ -387,6 +389,134 @@ TOOLS_DEFINITION = [
             "destructiveHint": False,
             "idempotentHint": True
         }
+    },
+    {
+        "name": "search_web",
+        "description": "Execute live web searches using multi-engine chain (TinyFish, DuckDuckGo, Jina) without monthly API subscriptions. Returns fresh source URLs, titles, and snippets. Requires x402 micropayment (0.005 USDC on Base).\n\nWhen to use: Real-time web browsing and information retrieval for AI agents.\nWhen NOT to use: Do NOT use for deep recursive crawling of entire sites.\n\nParameters:\n- `query` (string, required): Search query (3-300 chars).\n- `limit` (integer, optional, default 5): Maximum number of search results to return (1-10).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 300,
+                    "description": "Web search query."
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "default": 5,
+                    "description": "Number of results to return."
+                }
+            },
+            "required": ["query"]
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Original search query"},
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string"},
+                            "title": {"type": "string"},
+                            "snippet": {"type": "string"},
+                            "type": {"type": "string"}
+                        }
+                    }
+                },
+                "count": {"type": "integer", "description": "Number of returned results"}
+            },
+            "required": ["query", "results"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True
+        }
+    },
+    {
+        "name": "extract_json_from_web",
+        "description": "Extract structured JSON data matching a custom schema directly from any webpage. Extracts clean content and processes schema mapping via fast LLM parsing. Requires x402 micropayment (0.015 USDC on Base).\n\nWhen to use: Scraping structured data (product specs, prices, jobs, articles) into clean JSON.\nWhen NOT to use: Do NOT use for general open-ended chat without a defined schema.\n\nParameters:\n- `url` (string, required): Target webpage URL.\n- `schema` (object, required): JSON object describing fields or schema to extract.\n- `instructions` (string, optional): Specific guidance for extraction.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 8,
+                    "maxLength": 1000,
+                    "description": "Target webpage URL."
+                },
+                "schema": {
+                    "type": "object",
+                    "description": "Schema definition or list of fields to extract."
+                },
+                "instructions": {
+                    "type": "string",
+                    "description": "Optional instructions for parsing or field formatting."
+                }
+            },
+            "required": ["url", "schema"]
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "title": {"type": "string"},
+                "data": {"type": "object", "description": "Extracted JSON fields"},
+                "elapsed_ms": {"type": "integer"}
+            },
+            "required": ["url", "data"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True
+        }
+    },
+    {
+        "name": "fetch_stealth_web",
+        "description": "Fetch webpage HTML with modern browser TLS and header impersonation (Sec-Ch-Ua, realistic headers) to bypass bot protection and detect anti-bot challenges. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Fetching websites that block standard cURL or basic HTTP libraries with 403 Forbidden.\nWhen NOT to use: Do NOT use for downloading giant binary files (videos, zip archives).\n\nParameters:\n- `url` (string, required): Target webpage URL.\n- `custom_headers` (object, optional): Additional HTTP headers to pass along.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 8,
+                    "maxLength": 1000,
+                    "description": "Target webpage URL."
+                },
+                "custom_headers": {
+                    "type": "object",
+                    "description": "Optional custom headers."
+                }
+            },
+            "required": ["url"]
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "http_status": {"type": "integer"},
+                "title": {"type": "string"},
+                "challenge_detected": {"type": "boolean"},
+                "challenge_type": {"type": "string"},
+                "content_length": {"type": "integer"},
+                "html": {"type": "string"},
+                "elapsed_ms": {"type": "integer"}
+            },
+            "required": ["url", "http_status", "html"]
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True
+        }
     }
 ]
 
@@ -586,6 +716,121 @@ async def read_page(request: Request):
     _log({"path": "/v1/read", "url": url[:60], "remote": remote_ip, "result": "paid_ok"})
     return JSONResponse(content=result)
 
+@app.post("/v1/search")
+async def search_endpoint(request: Request):
+    """Execute live web searches with x402 payment."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    query = body.get("query")
+    if not query:
+        return JSONResponse(content={"error": "missing 'query' field in request body"}, status_code=400)
+    limit = min(int(body.get("limit", 5)), 10)
+    amount = "5000"  # 0.005 USDC
+    resource = _get_resource(request)
+    description = "Live Web Search API — real-time web evidence (0.005 USDC)."
+    payment_header = request.headers.get("X-PAYMENT")
+    remote_ip = request.client.host if request.client else "unknown"
+    if not payment_header:
+        _log({"path": "/v1/search", "query": query[:60], "remote": remote_ip, "result": "402_no_payment"})
+        return Response(
+            content=json.dumps(_payment_requirements(resource, amount, description)),
+            status_code=402,
+            headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
+        )
+    try:
+        paid, reason = await _verify_payment(request, amount, description)
+        if not paid:
+            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, description)}
+            if reason:
+                detail["invalidReason"] = reason
+            return JSONResponse(content=detail, status_code=402)
+    except Exception as e:
+        _log({"path": "/v1/search", "query": query[:60], "remote": remote_ip, "result": "500_payment_error", "error": str(e)})
+        return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)
+    
+    results = search(query, limit)
+    _log({"path": "/v1/search", "query": query[:60], "remote": remote_ip, "result": "paid_ok"})
+    return JSONResponse(content={"query": query, "results": results, "count": len(results)})
+
+@app.post("/v1/extract-json")
+async def extract_json_endpoint(request: Request):
+    """Extract structured JSON from webpage with x402 payment."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    url = body.get("url")
+    schema_def = body.get("schema")
+    if not url or schema_def is None:
+        return JSONResponse(content={"error": "missing 'url' or 'schema' field in request body"}, status_code=400)
+    amount = "15000"  # 0.015 USDC
+    resource = _get_resource(request)
+    description = "Web-to-JSON Structured Extraction API — schema-driven data extraction (0.015 USDC)."
+    payment_header = request.headers.get("X-PAYMENT")
+    remote_ip = request.client.host if request.client else "unknown"
+    if not payment_header:
+        _log({"path": "/v1/extract-json", "url": url[:60], "remote": remote_ip, "result": "402_no_payment"})
+        return Response(
+            content=json.dumps(_payment_requirements(resource, amount, description)),
+            status_code=402,
+            headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
+        )
+    try:
+        paid, reason = await _verify_payment(request, amount, description)
+        if not paid:
+            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, description)}
+            if reason:
+                detail["invalidReason"] = reason
+            return JSONResponse(content=detail, status_code=402)
+    except Exception as e:
+        _log({"path": "/v1/extract-json", "url": url[:60], "remote": remote_ip, "result": "500_payment_error", "error": str(e)})
+        return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)
+    
+    instructions = body.get("instructions", "")
+    result = await extract_structured_json(url, schema_def, instructions)
+    _log({"path": "/v1/extract-json", "url": url[:60], "remote": remote_ip, "result": "paid_ok"})
+    return JSONResponse(content=result)
+
+@app.post("/v1/fetch-stealth")
+async def fetch_stealth_endpoint(request: Request):
+    """Fetch webpage HTML with stealth headers & bot protection detection with x402 payment."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    url = body.get("url")
+    if not url:
+        return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
+    amount = "10000"  # 0.010 USDC
+    resource = _get_resource(request)
+    description = "Stealth Web Fetcher API — anti-bot bypass & header impersonation (0.01 USDC)."
+    payment_header = request.headers.get("X-PAYMENT")
+    remote_ip = request.client.host if request.client else "unknown"
+    if not payment_header:
+        _log({"path": "/v1/fetch-stealth", "url": url[:60], "remote": remote_ip, "result": "402_no_payment"})
+        return Response(
+            content=json.dumps(_payment_requirements(resource, amount, description)),
+            status_code=402,
+            headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
+        )
+    try:
+        paid, reason = await _verify_payment(request, amount, description)
+        if not paid:
+            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, description)}
+            if reason:
+                detail["invalidReason"] = reason
+            return JSONResponse(content=detail, status_code=402)
+    except Exception as e:
+        _log({"path": "/v1/fetch-stealth", "url": url[:60], "remote": remote_ip, "result": "500_payment_error", "error": str(e)})
+        return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)
+    
+    custom_headers = body.get("custom_headers")
+    result = await fetch_stealth(url, custom_headers=custom_headers)
+    _log({"path": "/v1/fetch-stealth", "url": url[:60], "remote": remote_ip, "result": "paid_ok"})
+    return JSONResponse(content=result)
+
 @app.get("/icon.svg")
 async def icon():
     return Response(
@@ -604,9 +849,9 @@ async def glama_verification():
 async def server_card():
     return {
         "name": "io.github.drain54/verify-api",
-        "title": "Verify API",
-        "description": "AI infra claim verification + Web-to-Markdown LLM Reader + CAPTCHA solving — pay-per-use via x402 on Base USDC.",
-        "version": "0.4.0",
+        "title": "Verify API & Agent Tools Suite",
+        "description": "Multi-utility AI Agent suite: Claim Verification + Web Reader + Live Search + JSON Extraction + Stealth Fetch + CAPTCHA Solving — pay-per-use via x402 on Base USDC.",
+        "version": "0.5.0",
         "license": "MIT",
         "author": {
             "name": "drain54",
