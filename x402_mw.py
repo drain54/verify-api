@@ -1,8 +1,9 @@
 # x402_mw.py — payment middleware + CAPTCHA solving API
 import os, json, uuid, httpx, asyncio
 from datetime import datetime, timezone
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Query
 from fastapi.responses import JSONResponse
+from starlette.responses import StreamingResponse
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -520,17 +521,34 @@ TOOLS_DEFINITION = [
     }
 ]
 
+# In-memory session message queues for MCP SSE clients
+_sse_sessions: dict[str, asyncio.Queue] = {}
+
 def _mcp_rpc_response(body: dict):
-    method = body.get("method") if isinstance(body, dict) else None
-    req_id = body.get("id") if isinstance(body, dict) else 1
+    if not isinstance(body, dict):
+        return None
+    method = body.get("method")
+    has_id = "id" in body
+    req_id = body.get("id")
+
+    # JSON-RPC Notification (no id) -> signal 204 No Content
+    if not has_id or (method and method.startswith("notifications/")):
+        return {"_is_notification": True}
+
     if method == "initialize":
+        client_version = body.get("params", {}).get("protocolVersion") or "2024-11-05"
         return {
             "jsonrpc": "2.0",
             "id": req_id,
             "result": {
-                "protocolVersion": "2025-03-26",
-                "capabilities": {"tools": {"list": {"disabled": False}}},
-                "serverInfo": {"name": "verify-api", "version": "0.3.0"}
+                "protocolVersion": client_version,
+                "capabilities": {
+                    "tools": {"listChanged": False}
+                },
+                "serverInfo": {
+                    "name": "io.github.drain54/verify-api",
+                    "version": "0.5.0"
+                }
             }
         }
     elif method == "tools/list":
@@ -543,6 +561,31 @@ def _mcp_rpc_response(body: dict):
         }
     elif method == "ping":
         return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+    elif method == "tools/call":
+        params = body.get("params", {})
+        tool_name = params.get("name", "")
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Tool '{tool_name}' verified active on server. Requires x402 payment header on Base USDC for live execution."
+                    }
+                ],
+                "isError": False
+            }
+        }
+    elif method:
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {
+                "code": -32601,
+                "message": f"Method not found: {method}"
+            }
+        }
     return None
 
 @app.get("/")
@@ -553,6 +596,7 @@ async def root_mcp_info():
         "name": "io.github.drain54/verify-api",
         "status": "ok",
         "mcp_endpoint": "https://verify.drain54.my.id/v1/verify",
+        "sse_endpoint": "https://verify.drain54.my.id/sse",
         "card": "https://verify.drain54.my.id/.well-known/mcp/server-card.json"
     })
 
@@ -562,11 +606,64 @@ async def root_mcp_post(request: Request):
     try:
         body = await request.json()
         resp = _mcp_rpc_response(body)
-        if resp:
+        if resp is not None:
+            if resp.get("_is_notification"):
+                return Response(status_code=204)
             return JSONResponse(content=resp)
     except Exception:
         pass
-    return JSONResponse(content={"status": "ok", "message": "Verify API MCP endpoint."})
+    return JSONResponse(
+        content={
+            "jsonrpc": "2.0",
+            "error": {"code": -32700, "message": "Parse error / Invalid JSON-RPC request"}
+        },
+        status_code=400
+    )
+
+@app.get("/sse")
+async def mcp_sse_endpoint(request: Request):
+    session_id = str(uuid.uuid4())
+    queue: asyncio.Queue = asyncio.Queue()
+    _sse_sessions[session_id] = queue
+
+    async def event_generator():
+        try:
+            # MCP SSE handshake event: advertise message endpoint with session ID
+            yield f"event: endpoint\ndata: /messages?sessionId={session_id}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"event: message\ndata: {json.dumps(msg)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            _sse_sessions.pop(session_id, None)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+@app.post("/messages")
+async def mcp_sse_messages(request: Request, sessionId: str = Query(...)):
+    if sessionId not in _sse_sessions:
+        return JSONResponse(content={"error": "Session not found"}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        return Response(status_code=400)
+
+    resp = _mcp_rpc_response(body)
+    if resp is not None and not resp.get("_is_notification"):
+        await _sse_sessions[sessionId].put(resp)
+    return Response(status_code=202)
 
 @app.post("/v1/verify")
 async def paid_verify(request: Request):
@@ -873,7 +970,8 @@ async def server_card():
         },
         "icon": "https://verify.drain54.my.id/icon.svg",
         "remotes": [
-            {"type": "streamable-http", "url": "https://verify.drain54.my.id"}
+            {"type": "streamable-http", "url": "https://verify.drain54.my.id"},
+            {"type": "sse", "url": "https://verify.drain54.my.id/sse"}
         ],
         "tools": TOOLS_DEFINITION,
         "pricing": {
