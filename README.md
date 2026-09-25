@@ -20,7 +20,7 @@ Tersedia secara terpusat melalui endpoint `https://verify.drain54.my.id` dan ter
 
 | No | Nama Tool | Tipe / Endpoint | Estimasi Tarif (x402 USDC) | Fungsi Utama |
 |---|---|---|---|---|
-| 1 | `verify_ai_claim` | POST `/v1/verify` | $0.010 (std) / $0.030 (deep) | Verifikasi klaim akurasi, status provider LLM, pricing, kuota, dan infrastruktur AI. |
+| 1 | `verify_ai_claim` | POST `/v1/verify` | $1.00 (std) / $3.00 (deep) | Verifikasi mendalam klaim akurasi, status provider LLM, pricing, kuota, dan infrastruktur AI via multi-search engine & reasoning. |
 | 2 | `check_endpoint_health` | POST `/v1/health-check` | $0.002 | Pemeriksaan latensi, header, dan status ketersediaan endpoint API/web. |
 | 3 | `solve_captcha` | POST `/v1/solve-captcha` | $0.001 – $0.0025 | Pemecah tantangan CAPTCHA (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare). |
 | 4 | `get_captcha_pricing` | GET `/v1/captcha-pricing` | Gratis (Free) | Informasi struktur harga solver per tipe CAPTCHA. |

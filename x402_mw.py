@@ -61,12 +61,11 @@ def _log(event: dict):
     except Exception:
         pass
 
-def _payment_requirements(resource: str, amount: str, description: str = "AI infra claim verification — pay-per-query.") -> dict:
+def _single_requirement(resource: str, amount: str, description: str = "AI infra claim verification — pay-per-query.") -> dict:
     return {
-        "x402Version": 1,
         "scheme": "exact",
         "network": V1_NET,
-        "maxAmountRequired": amount,
+        "maxAmountRequired": str(amount),
         "resource": resource,
         "description": description,
         "mimeType": "application/json",
@@ -75,6 +74,27 @@ def _payment_requirements(resource: str, amount: str, description: str = "AI inf
         "asset": USDC,
         "extra": {"name": USDC_NAME, "version": "2"},
     }
+
+def _payment_requirements(resource: str, amount: str, description: str = "AI infra claim verification — pay-per-query.") -> dict:
+    return _single_requirement(resource, amount, description)
+
+def _402_response(resource: str, amount: str, description: str, error: str = "Payment Required", invalid_reason: str | None = None) -> JSONResponse:
+    challenge = {
+        "x402Version": 1,
+        "error": error,
+        "accepts": [_single_requirement(resource, amount, description)],
+    }
+    if invalid_reason:
+        challenge["invalidReason"] = invalid_reason
+    return JSONResponse(
+        content=challenge,
+        status_code=402,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/x402-payment-v2+json",
+            "Paywall": "x402"
+        }
+    )
 
 def _get_resource(request: Request) -> str:
     scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
@@ -698,17 +718,15 @@ async def paid_verify(request: Request):
     depth = (body.get("depth") or "standard").lower()
     amt = PRICES.get(depth, PRICES["standard"])
     resource = _get_resource(request)
+    desc = f"AI infrastructure claim verification — {depth} depth (1.00 USDC standard / 3.00 USDC deep)."
     payment_header = request.headers.get("X-PAYMENT")
     if not payment_header:
-        _log({"path": "/v1/verify", "method": body.get("method") or "unknown", "remote": request.client.host, "result": "402_no_payment"})
-        return Response(content=json.dumps(_payment_requirements(resource, amt)), status_code=402, headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"})
+        _log({"path": "/v1/verify", "method": body.get("method") or "unknown", "remote": request.client.host if request.client else "unknown", "result": "402_no_payment"})
+        return _402_response(resource, amt, desc)
     try:
-        paid, reason = await _verify_payment(request, amt)
+        paid, reason = await _verify_payment(request, amt, desc)
         if not paid:
-            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amt)}
-            if reason:
-                detail["invalidReason"] = reason
-            return JSONResponse(content=detail, status_code=402)
+            return _402_response(resource, amt, desc, error="Payment verification failed", invalid_reason=reason)
         req = Req(**body)
         result = await verify(req)
         _log({"path": "/v1/verify", "method": body.get("method") or "unknown", "remote": request.client.host, "result": "paid_ok"})
@@ -755,13 +773,10 @@ async def solve_captcha(request: Request):
     
     # Check payment first (standard x402 probe response)
     payment_header = request.headers.get("X-PAYMENT")
+    captcha_description = f"CAPTCHA solve — {captcha_type}."
     if not payment_header:
         _log({"path": "/v1/solve-captcha", "type": captcha_type, "remote": request.client.host if request.client else "unknown", "result": "402_no_payment"})
-        return JSONResponse(
-            content={"error": "payment required", "requirements": _payment_requirements(resource, amount, f"CAPTCHA solve — {captcha_type}.")},
-            status_code=402,
-            headers={"Paywall": "x402"}
-        )
+        return _402_response(resource, amount, captcha_description)
     
     if captcha_type not in CAPTCHA_PRICING:
         return JSONResponse(
@@ -769,14 +784,10 @@ async def solve_captcha(request: Request):
             status_code=400,
         )
     
-    captcha_description = f"CAPTCHA solve — {captcha_type}."
     try:
         paid, reason = await _verify_payment(request, amount, captcha_description)
         if not paid:
-            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, captcha_description)}
-            if reason:
-                detail["invalidReason"] = reason
-            return JSONResponse(content=detail, status_code=402)
+            return _402_response(resource, amount, captcha_description, error="Payment verification failed", invalid_reason=reason)
     except Exception as e:
         _log({"path": "/v1/solve-captcha", "type": captcha_type, "remote": request.client.host, "result": "500_payment_error", "error": str(e)})
         return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)
@@ -814,11 +825,7 @@ async def read_page(request: Request):
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
         _log({"path": "/v1/read", "url": str(body.get("url", ""))[:60], "remote": remote_ip, "result": "402_no_payment"})
-        return Response(
-            content=json.dumps(_payment_requirements(resource, amount, description)),
-            status_code=402,
-            headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
-        )
+        return _402_response(resource, amount, description)
     
     url = body.get("url")
     if not url:
@@ -827,10 +834,7 @@ async def read_page(request: Request):
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
-            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, description)}
-            if reason:
-                detail["invalidReason"] = reason
-            return JSONResponse(content=detail, status_code=402)
+            return _402_response(resource, amount, description, error="Payment verification failed", invalid_reason=reason)
     except Exception as e:
         _log({"path": "/v1/read", "url": url[:60], "remote": remote_ip, "result": "500_payment_error", "error": str(e)})
         return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)
@@ -857,11 +861,7 @@ async def search_endpoint(request: Request):
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
         _log({"path": "/v1/search", "query": str(body.get("query", ""))[:60], "remote": remote_ip, "result": "402_no_payment"})
-        return Response(
-            content=json.dumps(_payment_requirements(resource, amount, description)),
-            status_code=402,
-            headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
-        )
+        return _402_response(resource, amount, description)
     
     query = body.get("query")
     if not query:
@@ -870,10 +870,7 @@ async def search_endpoint(request: Request):
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
-            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, description)}
-            if reason:
-                detail["invalidReason"] = reason
-            return JSONResponse(content=detail, status_code=402)
+            return _402_response(resource, amount, description, error="Payment verification failed", invalid_reason=reason)
     except Exception as e:
         _log({"path": "/v1/search", "query": query[:60], "remote": remote_ip, "result": "500_payment_error", "error": str(e)})
         return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)
@@ -898,11 +895,7 @@ async def extract_json_endpoint(request: Request):
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
         _log({"path": "/v1/extract-json", "url": str(body.get("url", ""))[:60], "remote": remote_ip, "result": "402_no_payment"})
-        return Response(
-            content=json.dumps(_payment_requirements(resource, amount, description)),
-            status_code=402,
-            headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
-        )
+        return _402_response(resource, amount, description)
     
     url = body.get("url")
     schema_def = body.get("schema")
@@ -911,10 +904,7 @@ async def extract_json_endpoint(request: Request):
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
-            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, description)}
-            if reason:
-                detail["invalidReason"] = reason
-            return JSONResponse(content=detail, status_code=402)
+            return _402_response(resource, amount, description, error="Payment verification failed", invalid_reason=reason)
     except Exception as e:
         _log({"path": "/v1/extract-json", "url": url[:60], "remote": remote_ip, "result": "500_payment_error", "error": str(e)})
         return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)
@@ -940,11 +930,7 @@ async def fetch_stealth_endpoint(request: Request):
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
         _log({"path": "/v1/fetch-stealth", "url": str(body.get("url", ""))[:60], "remote": remote_ip, "result": "402_no_payment"})
-        return Response(
-            content=json.dumps(_payment_requirements(resource, amount, description)),
-            status_code=402,
-            headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
-        )
+        return _402_response(resource, amount, description)
     
     url = body.get("url")
     if not url:
@@ -952,10 +938,7 @@ async def fetch_stealth_endpoint(request: Request):
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
-            detail = {"error": "payment required", "requirements": _payment_requirements(resource, amount, description)}
-            if reason:
-                detail["invalidReason"] = reason
-            return JSONResponse(content=detail, status_code=402)
+            return _402_response(resource, amount, description, error="Payment verification failed", invalid_reason=reason)
     except Exception as e:
         _log({"path": "/v1/fetch-stealth", "url": url[:60], "remote": remote_ip, "result": "500_payment_error", "error": str(e)})
         return JSONResponse(content={"error": f"payment verification failed: {e}"}, status_code=500)

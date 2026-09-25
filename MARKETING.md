@@ -39,7 +39,7 @@ Semua layanan MCP dilindungi protokol micropayment **x402**: Agen membayar secar
 ## 🧰 Rincian 8 Tools MCP (Agent Interoperability)
 
 1. `verify_ai_claim` (`POST /v1/verify`)
-   - Verifikasi klaim akurasi, ketersediaan model gratis, dan status penyedia AI berbasis bukti web faktual.
+   - Verifikasi mendalam klaim akurasi, ketersediaan model gratis, dan status penyedia AI berbasis multi-source search ($1.00 standard / $3.00 deep).
 2. `check_endpoint_health` (`POST /v1/health-check`)
    - Pengujian ketersediaan, status HTTP, dan respon waktu server target.
 3. `solve_captcha` (`POST /v1/solve-captcha`)
