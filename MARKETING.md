@@ -61,4 +61,21 @@ Verify API answers whether an AI model, API, or infrastructure claim is still tr
 ## Compliance / buyer note
 - USDC on Base mainnet
 - Facilitator: `https://facilitator.payai.network`
+- MCP endpoint: `https://verify.drain54.my.id/mcp` (streamable-http)
 - Discovery: listed on PayAI Bazaar (`/discovery/resources`), Glama, Smithery, and Official MCP Registry (`io.github.drain54/verify-api`)
+
+## Marketplace presence
+
+| Marketplace | Status | Notes |
+|---|---|---|
+| Official MCP Registry | published v0.4.0 | Source of truth for downstream indexes |
+| Glama | active | Connector tab, `/.well-known/glama.json` verified |
+| Smithery | connected | Free handshake for scanner validation |
+| PayAI Bazaar | listed | Auto-catalogued on first settled payment |
+| VerifyMCP | indexed | Scores the registry entry; re-scans the published URL |
+| Canopii | scored 85/100 (B) | Security index, derived from published source |
+
+**Endpoint URL history:** versions `<= 0.3.0` pointed at a temporary
+`ngrok-free.dev` URL that is now dead. Current versions resolve to
+`https://verify.drain54.my.id/mcp`. If a downstream index still shows the
+ngrok URL, it is serving a stale cached copy of the registry entry.
