@@ -18,6 +18,7 @@ from main import verify, Req, search  # noqa: E402
 from reader_backend import extract_url  # noqa: E402
 from json_extractor import extract_structured_json  # noqa: E402
 from stealth_fetcher import fetch_stealth  # noqa: E402
+from metabolism import metabolism  # noqa: E402
 
 FACILITATOR = os.getenv("X402_FACILITATOR_URL", "https://facilitator.payai.network")
 WALLET = os.getenv("X402_WALLET", "")
@@ -179,12 +180,22 @@ async def _process_queue():
             _log({"path": "/v1/solve-captcha", "result": "queue_error", "error": str(e)})
             await asyncio.sleep(1)
 
+async def _metabolism_loop():
+    while True:
+        try:
+            await metabolism.refresh_balance(force=True)
+        except Exception:
+            pass
+        await asyncio.sleep(60)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start the queue processor on startup."""
+    """Start the queue processor and metabolism loop on startup."""
     task = asyncio.create_task(_process_queue())
+    meta_task = asyncio.create_task(_metabolism_loop())
     yield
     task.cancel()
+    meta_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -605,12 +616,15 @@ async def root_mcp_info():
 async def root_mcp_post(request: Request):
     try:
         body = await request.json()
+        with open("/tmp/glama_last_body.json", "w") as f:
+            f.write(json.dumps(body) + "\n")
         resp = _mcp_rpc_response(body)
         if resp is not None:
             if resp.get("_is_notification"):
                 return Response(status_code=204)
             return JSONResponse(content=resp)
-    except Exception:
+    except Exception as e:
+        _log({"path": "mcp_post_err", "err": str(e)})
         pass
     return JSONResponse(
         content={
@@ -770,6 +784,12 @@ async def solve_captcha(request: Request):
     status_code = 200 if result.get("solved") else 408 if "timed out" in result.get("error", "") else 500
     return JSONResponse(content=result, status_code=status_code)
 
+@app.get("/v1/organism/state")
+async def get_organism_state():
+    """Returns the live economic metabolism of the Autonomous Revenue Organism."""
+    state = await metabolism.refresh_balance()
+    return JSONResponse(content=state)
+
 @app.post("/v1/read")
 async def read_page(request: Request):
     """Extract clean Markdown from a webpage for LLM ingestion with x402 payment."""
@@ -782,9 +802,10 @@ async def read_page(request: Request):
     if not url:
         return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
     
-    amount = "5000"  # 0.005 USDC
+    base_amount = 5000  # 0.005 USDC
+    amount = str(metabolism.compute_dynamic_price(base_amount))
     resource = _get_resource(request)
-    description = "Web-to-Markdown LLM Reader — clean markdown extraction (0.005 USDC)."
+    description = f"Web-to-Markdown LLM Reader — clean markdown extraction ({int(amount)/1e6:.4f} USDC)."
     
     payment_header = request.headers.get("X-PAYMENT")
     remote_ip = request.client.host if request.client else "unknown"
@@ -824,9 +845,10 @@ async def search_endpoint(request: Request):
     if not query:
         return JSONResponse(content={"error": "missing 'query' field in request body"}, status_code=400)
     limit = min(int(body.get("limit", 5)), 10)
-    amount = "5000"  # 0.005 USDC
+    base_amount = 5000  # 0.005 USDC
+    amount = str(metabolism.compute_dynamic_price(base_amount))
     resource = _get_resource(request)
-    description = "Live Web Search API — real-time web evidence (0.005 USDC)."
+    description = f"Live Web Search API — real-time web evidence ({int(amount)/1e6:.4f} USDC)."
     payment_header = request.headers.get("X-PAYMENT")
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
@@ -862,9 +884,10 @@ async def extract_json_endpoint(request: Request):
     schema_def = body.get("schema")
     if not url or schema_def is None:
         return JSONResponse(content={"error": "missing 'url' or 'schema' field in request body"}, status_code=400)
-    amount = "15000"  # 0.015 USDC
+    base_amount = 15000  # 0.015 USDC
+    amount = str(metabolism.compute_dynamic_price(base_amount))
     resource = _get_resource(request)
-    description = "Web-to-JSON Structured Extraction API — schema-driven data extraction (0.015 USDC)."
+    description = f"Web-to-JSON Structured Extraction API — schema-driven data extraction ({int(amount)/1e6:.4f} USDC)."
     payment_header = request.headers.get("X-PAYMENT")
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
@@ -900,9 +923,10 @@ async def fetch_stealth_endpoint(request: Request):
     url = body.get("url")
     if not url:
         return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
-    amount = "10000"  # 0.010 USDC
+    base_amount = 10000  # 0.010 USDC
+    amount = str(metabolism.compute_dynamic_price(base_amount))
     resource = _get_resource(request)
-    description = "Stealth Web Fetcher API — anti-bot bypass & header impersonation (0.01 USDC)."
+    description = f"Stealth Web Fetcher API — anti-bot bypass & header impersonation ({int(amount)/1e6:.4f} USDC)."
     payment_header = request.headers.get("X-PAYMENT")
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:

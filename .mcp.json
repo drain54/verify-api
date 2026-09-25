@@ -2,16 +2,17 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.drain54/verify-api",
   "title": "Verify API",
-  "description": "AI infrastructure claim verification — pay-per-query via x402.",
+  "description": "AI infrastructure micro-services — claim verification, web-to-markdown, structured extraction, stealth fetch, and CAPTCHA solving. Pay-per-query via x402 (USDC on Base).",
   "repository": {
     "url": "https://github.com/drain54/verify-api",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.4.0",
+  "websiteUrl": "https://verify.drain54.my.id",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://slinging-chloride-chair.ngrok-free.dev/v1/verify"
+      "url": "https://verify.drain54.my.id/mcp"
     }
   ]
 }

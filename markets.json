@@ -1,0 +1,9 @@
+[
+  {
+    "name": "glama",
+    "url": "https://glama.ai/mcp/servers/verify-api",
+    "evidence": "glama.json HTTP 200 + Glama scanner POST / 200",
+    "verified": true,
+    "registered_at": "2026-09-25T09:44:41.170688+00:00"
+  }
+]

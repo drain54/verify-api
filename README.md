@@ -12,7 +12,7 @@ AI infrastructure claim verification via x402 pay-per-query.
 ## Run locally
 
 ```bash
-cd /home/server1/verify-api
+cd /home/aether/verify-api
 .venv/bin/python x402_mw.py
 ```
 
@@ -31,10 +31,15 @@ Without payment → `402` with `x402` payment requirements.
 ## Monitoring
 
 ```bash
-/home/server1/.local/bin/verify-usage
+# Live service and tunnel status
+systemctl --user status verify-api.service cloudflared-aether-verify.service
+
+# Public health and Glama verification
+curl -sS https://verify.drain54.my.id/health
+curl -sS https://verify.drain54.my.id/.well-known/glama.json
 ```
 
-Log: `/home/server1/verify-api/usage.jsonl`
+Log: `/home/aether/verify-api/usage.jsonl`
 
 ## Marketplace listings
 
