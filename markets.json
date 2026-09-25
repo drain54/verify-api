@@ -2,8 +2,33 @@
   {
     "name": "glama",
     "url": "https://glama.ai/mcp/servers/verify-api",
-    "evidence": "glama.json HTTP 200 + Glama scanner POST / 200",
+    "evidence": "Listed 2026-09-19 (commit 8d6d5ec, pre-incentive). glama.json HTTP 200.",
     "verified": true,
-    "registered_at": "2026-09-25T09:44:41.170688+00:00"
+    "established": true,
+    "registered_at": "2026-09-19T00:20:00+00:00"
+  },
+  {
+    "name": "smithery",
+    "url": "https://smithery.ai/servers/indradarmawan87/verify-api",
+    "evidence": "Listed 2026-09-19 (commit 8d6d5ec, pre-incentive).",
+    "verified": true,
+    "established": true,
+    "registered_at": "2026-09-19T00:20:00+00:00"
+  },
+  {
+    "name": "mcp_registry",
+    "url": "https://registry.modelcontextprotocol.io/io.github.drain54/verify-api",
+    "evidence": "Published 2026-09-02 (commit 2d36d35).",
+    "verified": true,
+    "established": true,
+    "registered_at": "2026-09-02T23:01:00+00:00"
+  },
+  {
+    "name": "payai_bazaar",
+    "url": "https://facilitator.payai.network/discovery/resources",
+    "evidence": "Auto-catalogued on first settled payment, pre-incentive.",
+    "verified": true,
+    "established": true,
+    "registered_at": "2026-09-19T00:20:00+00:00"
   }
 ]

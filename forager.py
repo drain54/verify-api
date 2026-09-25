@@ -41,11 +41,15 @@ def save_markets(markets: list):
 
 
 def active_new_markets() -> list:
-    """Return markets still inside their bonus window."""
+    """Return markets still inside their bonus window.
+
+    Markets flagged `established` (listed before the incentive system existed)
+    are NEVER eligible for the bonus, regardless of timestamp.
+    """
     now = datetime.now(timezone.utc)
     out = []
     for m in load_markets():
-        if not m.get("verified"):
+        if not m.get("verified") or m.get("established"):
             continue
         since = datetime.fromisoformat(m["registered_at"])
         age_days = (now - since).days
@@ -63,21 +67,31 @@ def market_multiplier() -> tuple:
     return NEW_MARKET_MULTIPLIER, active
 
 
-def register_market(name: str, url: str, evidence: str = "") -> dict:
-    """Call this only AFTER a live listing has been verified reachable."""
+def register_market(name: str, url: str, evidence: str = "",
+                    established: bool = False,
+                    registered_at: str | None = None) -> dict:
+    """Register a marketplace listing.
+
+    established=True  -> pre-existing listing, no bonus ever.
+    registered_at     -> pass the REAL listing date; defaults to now. Do not
+                         backdate a genuinely new market to farm the bonus.
+    """
     markets = load_markets()
     for m in markets:
         if m["name"] == name:
             m.update({"url": url, "verified": True, "evidence": evidence,
+                      "established": established,
                       "reverified_at": datetime.now(timezone.utc).isoformat()})
             save_markets(markets)
             return {"ok": False, "reason": "already registered", "market": m}
     entry = {"name": name, "url": url, "evidence": evidence, "verified": True,
-             "registered_at": datetime.now(timezone.utc).isoformat()}
+             "established": established,
+             "registered_at": registered_at or datetime.now(timezone.utc).isoformat()}
     markets.append(entry)
     save_markets(markets)
-    return {"ok": True, "market": entry, "bonus_multiplier": NEW_MARKET_MULTIPLIER,
-            "bonus_days": NEW_MARKET_BONUS_DAYS}
+    return {"ok": True, "market": entry,
+            "bonus_multiplier": 1.0 if established else NEW_MARKET_MULTIPLIER,
+            "bonus_days": 0 if established else NEW_MARKET_BONUS_DAYS}
 
 def get_env_val(key: str, default: str = "") -> str:
     val = os.getenv(key)
