@@ -8,4 +8,5 @@ foraging.jsonl
 remediation.jsonl
 remediate_queue.jsonl
 remediate_state.json
+remediate_nonces.json
 .venv/

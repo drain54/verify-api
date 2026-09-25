@@ -1010,6 +1010,33 @@ async def server_card():
 async def health():
     return {"ok": True, "facilitator": FACILITATOR, "network": NET, "paid": bool(WALLET)}
 
+@app.get("/v1/remediate/approve")
+async def approve_remediation(action: str, token: str):
+    """Execute a Poci remediation action after validating a signed one-time token."""
+    import remediate as R
+    v = R.verify_approval_token(action, token)
+    if not v.get("ok"):
+        R._log({"event": "approve_rejected", "action": action, "reason": v.get("reason")})
+        return JSONResponse(content={"ok": False, "error": v.get("reason")}, status_code=403)
+    if action not in R.ACTIONS:
+        return JSONResponse(content={"ok": False, "error": "unknown_action"}, status_code=400)
+
+    # restart_mw would kill the process serving this request — defer it.
+    if action == "restart_mw":
+        import threading
+        def _deferred():
+            import time as _t
+            _t.sleep(2)
+            R._log({"event": "deferred_restart_mw", "approved": True})
+            R.action_restart_mw()
+        threading.Thread(target=_deferred, daemon=True).start()
+        result = {"ok": True, "detail": "restart_mw scheduled in 2s (current worker will be replaced)"}
+    else:
+        result = R.ACTIONS[action]()
+
+    R._log({"event": "approve_executed", "action": action, "result": result})
+    return JSONResponse(content={"ok": True, "action": action, "result": result})
+
 # ponytail: path routing to provisioning service — coupled to verify-api lifecycle
 PROVISIONING_URL = "http://127.0.0.1:8013"
 

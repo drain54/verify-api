@@ -4,7 +4,11 @@
 import os
 import json
 import time
+import hmac
+import base64
 import shutil
+import secrets
+import hashlib
 import subprocess
 import urllib.request
 import urllib.error
@@ -15,11 +19,14 @@ BASE_DIR = Path(__file__).parent
 QUEUE_PATH = BASE_DIR / "remediate_queue.jsonl"
 STATE_PATH = BASE_DIR / "remediate_state.json"
 LOG_PATH = BASE_DIR / "remediation.jsonl"
+NONCE_PATH = BASE_DIR / "remediate_nonces.json"
 
 MW_PORT = 8012
 SOLVER_PORT = 8877
 PUBLIC_URL = "https://verify.drain54.my.id"
 HERMES_ENV = Path("/home/aether/.hermes/profiles/jarpis-bot1/.env")
+ENV_PATH = BASE_DIR / ".env"
+HERMES_ENV_PATH = Path("/home/aether/.hermes/.env")
 
 # Actions that Poci may execute WITHOUT approval (non-destructive, service already dead)
 AUTO_ACTIONS = {"restart_solver", "restart_mw", "restart_tunnel"}
@@ -107,8 +114,10 @@ def action_restart_solver() -> dict:
 
 
 def action_restart_mw() -> dict:
+    """Kill any running middleware then respawn it. Safe when nothing is running."""
     if proc_running("x402_mw.py"):
-        return {"ok": False, "reason": "middleware already running"}
+        subprocess.run(["pkill", "-f", "x402_mw.py"], capture_output=True)
+        time.sleep(2)
     py = BASE_DIR / ".venv/bin/python"
     subprocess.Popen(
         [str(py), str(BASE_DIR / "x402_mw.py")],
@@ -117,7 +126,7 @@ def action_restart_mw() -> dict:
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    return {"ok": True, "detail": "x402_mw.py spawned"}
+    return {"ok": True, "detail": "x402_mw.py (re)spawned"}
 
 
 def action_restart_tunnel() -> dict:
@@ -167,17 +176,91 @@ def get_telegram_token() -> str:
     return ""
 
 
-def send_telegram(text: str, thread_id: int = 576) -> bool:
+# ------------------------------------------------- CLICKABLE APPROVAL TOKENS
+# A remediation alert carries a signed, single-use, time-limited token. The
+# Telegram inline button opens /v1/remediate/approve?action=..&token=.. which
+# validates the HMAC before executing. No secret ever leaves the server.
+
+APPROVAL_TTL_SECONDS = 900  # 15 minutes
+
+
+def _approval_secret() -> bytes:
+    for p in (ENV_PATH, HERMES_ENV_PATH):
+        if p.is_file():
+            for line in p.read_text().splitlines():
+                if line.startswith("POCI_APPROVAL_SECRET="):
+                    return line.split("=", 1)[1].strip().strip("\"'").encode()
+    # Deterministic fallback derived from an existing secret so no new
+    # credential is required for the feature to work.
+    return hashlib.sha256(get_telegram_token().encode()).digest()
+
+
+def _b64e(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _b64d(s: str) -> bytes:
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def mint_approval_token(action: str, ttl: int = APPROVAL_TTL_SECONDS) -> str:
+    nonce = secrets.token_hex(8)
+    exp = int(time.time()) + ttl
+    payload = f"{action}|{nonce}|{exp}".encode()
+    sig = hmac.new(_approval_secret(), payload, hashlib.sha256).digest()[:16]
+    return f"{_b64e(payload)}.{_b64e(sig)}"
+
+
+def verify_approval_token(action: str, token: str) -> dict:
+    try:
+        payload_b64, sig_b64 = token.split(".", 1)
+        payload = _b64d(payload_b64)
+        sig = _b64d(sig_b64)
+    except Exception:
+        return {"ok": False, "reason": "malformed_token"}
+    expected = hmac.new(_approval_secret(), payload, hashlib.sha256).digest()[:16]
+    if not hmac.compare_digest(sig, expected):
+        return {"ok": False, "reason": "bad_signature"}
+    try:
+        tok_action, nonce, exp = payload.decode().split("|")
+        exp = int(exp)
+    except Exception:
+        return {"ok": False, "reason": "malformed_payload"}
+    if tok_action != action:
+        return {"ok": False, "reason": "action_mismatch"}
+    if time.time() > exp:
+        return {"ok": False, "reason": "expired"}
+    # Single-use
+    used = {}
+    if NONCE_PATH.is_file():
+        try:
+            used = json.loads(NONCE_PATH.read_text())
+        except Exception:
+            used = {}
+    if nonce in used:
+        return {"ok": False, "reason": "already_used"}
+    used[nonce] = {"action": action, "ts": datetime.now(timezone.utc).isoformat()}
+    try:
+        NONCE_PATH.write_text(json.dumps(used))
+    except Exception:
+        pass
+    return {"ok": True, "action": action, "nonce": nonce}
+
+
+def send_telegram(text: str, thread_id: int = 576, reply_markup: dict | None = None) -> bool:
     token = get_telegram_token()
     if not token:
         _log({"event": "alert_failed", "reason": "no token"})
         return False
-    payload = json.dumps({
+    body = {
         "chat_id": "-1004473785949",
         "message_thread_id": thread_id,
         "text": text,
         "parse_mode": "Markdown",
-    }).encode()
+    }
+    if reply_markup:
+        body["reply_markup"] = reply_markup
+    payload = json.dumps(body).encode()
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/sendMessage",
         data=payload,
@@ -202,13 +285,36 @@ def propose(action: str, reason: str, diagnosis: dict, auto: bool):
     }
     with QUEUE_PATH.open("a") as f:
         f.write(json.dumps(entry) + "\n")
-    tag = "✅ AUTO-EXECUTED" if auto else "🛑 AWAITING APPROVAL"
+
+    if auto:
+        tag = "✅ AUTO-EXECUTED"
+        send_telegram(
+            f"⚠️ *POCI REMEDIATION ALERT*\n"
+            f"Action: `{action}`\n"
+            f"Reason: {reason}\n"
+            f"Status: {tag}\n\n"
+            f"```\n{json.dumps(diagnosis, indent=2)[:900]}\n```"
+        )
+        return entry
+
+    # Needs approval -> attach a clickable, signed, single-use button.
+    tok = mint_approval_token(action)
+    approve_url = (f"{PUBLIC_URL}/v1/remediate/approve"
+                   f"?action={action}&token={tok}")
+    entry["approval_url"] = approve_url
+    with QUEUE_PATH.open("a") as f:
+        f.write(json.dumps({**entry, "event": "approval_link_issued"}) + "\n")
+
     send_telegram(
         f"⚠️ *POCI REMEDIATION ALERT*\n"
         f"Action: `{action}`\n"
         f"Reason: {reason}\n"
-        f"Status: {tag}\n\n"
-        f"```\n{json.dumps(diagnosis, indent=2)[:900]}\n```"
+        f"Status: 🛑 AWAITING APPROVAL\n\n"
+        f"```\n{json.dumps(diagnosis, indent=2)[:900]}\n```",
+        reply_markup={"inline_keyboard": [[
+            {"text": f"✅ Jalankan {action}", "url": approve_url},
+            {"text": "❌ Abaikan", "callback_data": f"poci_ignore:{action}"},
+        ]]},
     )
     return entry
 
