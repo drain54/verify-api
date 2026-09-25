@@ -19,6 +19,7 @@ from reader_backend import extract_url  # noqa: E402
 from json_extractor import extract_structured_json  # noqa: E402
 from stealth_fetcher import fetch_stealth  # noqa: E402
 from metabolism import metabolism  # noqa: E402
+from ssrf_guard import is_safe_url  # noqa: E402
 
 FACILITATOR = os.getenv("X402_FACILITATOR_URL", "https://facilitator.payai.network")
 WALLET = os.getenv("X402_WALLET", "")
@@ -225,6 +226,7 @@ TOOLS_DEFINITION = [
         "description": "Verify whether an AI model, API provider, pricing claim, or infrastructure assertion is true today using live web evidence. Returns deterministic verdicts (TRUE, FALSE, PARTIALLY_TRUE, UNREACHABLE, UNVERIFIED) with cited sources and confidence scores. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Fact-checking an AI provider's claims, pricing, or model availability.\nWhen NOT to use: Do NOT use for general open-ended web search, coding assistance, or non-AI claim verification.\n\nParameters:\n- `query` (string, required): The exact claim or assertion to verify (5-500 chars), e.g. 'Is GLM-5.3 Flash free on ZenMux?'.\n- `depth` (string, optional, default 'standard'): Verification depth. 'standard' executes fast single-pass search (0.01 USDC); 'deep' conducts multi-source cross-examination (0.03 USDC).",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "query": {
                     "type": "string",
@@ -276,6 +278,7 @@ TOOLS_DEFINITION = [
         "description": "Probe and verify the reachability, HTTP status code, latency, and operational health of an AI API endpoint or web service. Follows redirects with a 15-second timeout. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Check if a specific API URL or model endpoint is online, responding, or returning 5xx/402 errors.\nWhen NOT to use: Do NOT use for general domain WHOIS or DNS record lookups.\n\nParameters:\n- `url` (string, required): Target HTTP/HTTPS endpoint URL to probe (8-1000 chars), e.g. 'https://api.openai.com/v1/models'.",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "url": {
                     "type": "string",
@@ -309,6 +312,7 @@ TOOLS_DEFINITION = [
         "description": "Solve web CAPTCHA challenges (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare) and return a valid solution token. Automatically retries once on failure without double charging. Requires x402 payment on Base.\n\nWhen to use: Use when an agent encounters a bot wall or CAPTCHA challenge during automated web workflows.\nWhen NOT to use: Do NOT use for non-CAPTCHA auth, 2FA/OTP codes, or general login forms.\n\nParameters:\n- `type` (string, required): CAPTCHA type ('turnstile', 'hcaptcha', 'recaptcha', 'arkose', 'cloudflare').\n- `sitekey` (string, required): Public sitekey extracted from the target page DOM.\n- `url` (string, required): Full target webpage URL hosting the challenge.",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "type": {
                     "type": "string",
@@ -355,6 +359,7 @@ TOOLS_DEFINITION = [
         "description": "Retrieve current x402 pricing per 1,000 CAPTCHA solves across all supported types (Turnstile, hCaptcha, reCAPTCHA v2, Arkose, Cloudflare). Free endpoint with zero parameters.\n\nWhen to use: Check current rates and atomic USDC requirements before calling solve_captcha.\nWhen NOT to use: Do NOT use to submit or solve CAPTCHA challenges.",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {},
             "required": []
         },
@@ -381,6 +386,7 @@ TOOLS_DEFINITION = [
         "description": "Extract clean, readable Markdown and metadata from any public webpage for LLM ingestion, stripping ads, popups, and navigational clutter. Returns clean markdown, title, description, character count, and estimated tokens. Requires x402 micropayment (0.005 USDC on Base).\n\nWhen to use: Ingesting articles, blog posts, documentation, or news pages into LLM context.\nWhen NOT to use: Do NOT use for raw binary files (PDF/images), authenticated pages behind a login, or single-page apps that require heavy JavaScript rendering.\n\nParameters:\n- `url` (string, required): Full target webpage URL (e.g. 'https://news.ycombinator.com').\n- `include_links` (boolean, optional, default true): Whether to preserve markdown hyperlinks.\n- `include_images` (boolean, optional, default false): Whether to preserve image markdown links.",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "url": {
                     "type": "string",
@@ -427,6 +433,7 @@ TOOLS_DEFINITION = [
         "description": "Execute live web searches using multi-engine chain (TinyFish, DuckDuckGo, Jina) without monthly API subscriptions. Returns fresh source URLs, titles, and snippets. Requires x402 micropayment (0.005 USDC on Base).\n\nWhen to use: Real-time web browsing and information retrieval for AI agents.\nWhen NOT to use: Do NOT use for deep recursive crawling of entire sites.\n\nParameters:\n- `query` (string, required): Search query (3-300 chars).\n- `limit` (integer, optional, default 5): Maximum number of search results to return (1-10).",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "query": {
                     "type": "string",
@@ -475,6 +482,7 @@ TOOLS_DEFINITION = [
         "description": "Extract structured JSON data matching a custom schema directly from any webpage. Extracts clean content and processes schema mapping via fast LLM parsing. Requires x402 micropayment (0.015 USDC on Base).\n\nWhen to use: Scraping structured data (product specs, prices, jobs, articles) into clean JSON.\nWhen NOT to use: Do NOT use for general open-ended chat without a defined schema.\n\nParameters:\n- `url` (string, required): Target webpage URL.\n- `schema` (object, required): JSON object describing fields or schema to extract.\n- `instructions` (string, optional): Specific guidance for extraction.",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "url": {
                     "type": "string",
@@ -515,6 +523,7 @@ TOOLS_DEFINITION = [
         "description": "Fetch webpage HTML with modern browser TLS and header impersonation (Sec-Ch-Ua, realistic headers) to bypass bot protection and detect anti-bot challenges. Requires x402 micropayment (0.01 USDC on Base).\n\nWhen to use: Fetching websites that block standard cURL or basic HTTP libraries with 403 Forbidden.\nWhen NOT to use: Do NOT use for downloading giant binary files (videos, zip archives).\n\nParameters:\n- `url` (string, required): Target webpage URL.\n- `custom_headers` (object, optional): Additional HTTP headers to pass along.",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "url": {
                     "type": "string",
@@ -831,6 +840,10 @@ async def read_page(request: Request):
     if not url:
         return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
     
+    safe, reason = is_safe_url(url)
+    if not safe:
+        return JSONResponse(content={"error": f"SSRF security policy violation: {reason}"}, status_code=403)
+    
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
@@ -901,6 +914,10 @@ async def extract_json_endpoint(request: Request):
     schema_def = body.get("schema")
     if not url or schema_def is None:
         return JSONResponse(content={"error": "missing 'url' or 'schema' field in request body"}, status_code=400)
+    
+    safe, reason = is_safe_url(url)
+    if not safe:
+        return JSONResponse(content={"error": f"SSRF security policy violation: {reason}"}, status_code=403)
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
@@ -935,6 +952,10 @@ async def fetch_stealth_endpoint(request: Request):
     url = body.get("url")
     if not url:
         return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
+    
+    safe, reason = is_safe_url(url)
+    if not safe:
+        return JSONResponse(content={"error": f"SSRF security policy violation: {reason}"}, status_code=403)
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:

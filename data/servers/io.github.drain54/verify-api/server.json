@@ -1,8 +1,8 @@
 {
   "name": "verify-api",
-  "description": "AI infrastructure claim verification — pay-per-query via x402.",
+  "description": "AI infrastructure claim verification \u2014 pay-per-query via x402.",
   "repository": "https://github.com/drain54/verify-api",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "server": {
     "type": "http",
     "url": "https://verify.drain54.my.id/v1/verify",
@@ -29,7 +29,13 @@
         "verdict": "TRUE|FALSE|PARTIALLY_TRUE|CHANGED|UNREACHABLE|BLOCKED|UNVERIFIED",
         "answer": "evidence-backed answer",
         "confidence": 0.91,
-        "sources": [{"url":"https://...","type":"official","supports":"..."}],
+        "sources": [
+          {
+            "url": "https://...",
+            "type": "official",
+            "supports": "..."
+          }
+        ],
         "caveats": []
       }
     }

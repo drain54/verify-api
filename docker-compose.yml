@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  verify-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: drain54/verify-api:1.0.0
+    container_name: verify-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8012:8012"
+    environment:
+      - X402_FACILITATOR_URL=https://facilitator.payai.network
+      - X402_WALLET=0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98
+      - X402_USDC=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+      - X402_NETWORK=eip155:8453
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: false
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M

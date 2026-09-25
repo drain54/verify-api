@@ -1,4 +1,5 @@
 import json, urllib.request, time
+from ssrf_guard import is_safe_url
 
 BASE = "http://127.0.0.1:8011/v1/verify"
 
@@ -17,6 +18,10 @@ CASES = [
 ]
 
 def call(query, typ, url=None):
+    if url:
+        safe, reason = is_safe_url(url)
+        if not safe:
+            raise ValueError(f"SSRF safety check failed: {reason}")
     body = json.dumps({"query":query,"type":typ,"depth":"standard",
                        **({"target_url":url} if url else {})}).encode()
     req = urllib.request.Request(BASE, data=body, headers={"Content-Type":"application/json"})
