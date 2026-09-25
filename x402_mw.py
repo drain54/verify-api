@@ -972,7 +972,7 @@ async def server_card():
         "name": "io.github.drain54/verify-api",
         "title": "Verify API & Agent Tools Suite",
         "description": "Multi-utility AI Agent suite: Claim Verification + Web Reader + Live Search + JSON Extraction + Stealth Fetch + CAPTCHA Solving — pay-per-use via x402 on Base USDC.",
-        "version": "0.5.0",
+        "version": "1.0.0",
         "license": "MIT",
         "author": {
             "name": "drain54",
