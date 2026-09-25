@@ -51,6 +51,9 @@ def active_new_markets() -> list:
     for m in load_markets():
         if not m.get("verified") or m.get("established"):
             continue
+        # Only markets Poci submitted itself earn the bonus.
+        if m.get("attributed_to", "poci") != "poci":
+            continue
         since = datetime.fromisoformat(m["registered_at"])
         age_days = (now - since).days
         if age_days <= NEW_MARKET_BONUS_DAYS:
@@ -69,29 +72,38 @@ def market_multiplier() -> tuple:
 
 def register_market(name: str, url: str, evidence: str = "",
                     established: bool = False,
-                    registered_at: str | None = None) -> dict:
+                    registered_at: str | None = None,
+                    attributed_to: str = "poci") -> dict:
     """Register a marketplace listing.
 
-    established=True  -> pre-existing listing, no bonus ever.
-    registered_at     -> pass the REAL listing date; defaults to now. Do not
-                         backdate a genuinely new market to farm the bonus.
+    established=True   -> pre-existing listing, no bonus ever.
+    registered_at      -> pass the REAL listing date; defaults to now. Do not
+                          backdate a genuinely new market to farm the bonus.
+    attributed_to      -> "poci" (default) or "human". The x2 bonus is only
+                          granted to markets Poci submitted itself; a market
+                          the human registered manually earns no bonus.
     """
     markets = load_markets()
     for m in markets:
         if m["name"] == name:
             m.update({"url": url, "verified": True, "evidence": evidence,
                       "established": established,
+                      "attributed_to": attributed_to,
                       "reverified_at": datetime.now(timezone.utc).isoformat()})
             save_markets(markets)
             return {"ok": False, "reason": "already registered", "market": m}
     entry = {"name": name, "url": url, "evidence": evidence, "verified": True,
-             "established": established,
+             "established": established, "attributed_to": attributed_to,
              "registered_at": registered_at or datetime.now(timezone.utc).isoformat()}
     markets.append(entry)
     save_markets(markets)
+    eligible = (not established) and attributed_to == "poci"
     return {"ok": True, "market": entry,
-            "bonus_multiplier": 1.0 if established else NEW_MARKET_MULTIPLIER,
-            "bonus_days": 0 if established else NEW_MARKET_BONUS_DAYS}
+            "bonus_multiplier": NEW_MARKET_MULTIPLIER if eligible else 1.0,
+            "bonus_days": NEW_MARKET_BONUS_DAYS if eligible else 0,
+            "bonus_reason": None if eligible else
+                            ("established market" if established
+                             else f"attributed to {attributed_to}, not poci")}
 
 def get_env_val(key: str, default: str = "") -> str:
     val = os.getenv(key)
