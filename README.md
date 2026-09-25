@@ -43,9 +43,9 @@ Log: `/home/aether/verify-api/usage.jsonl`
 
 ## Marketplace listings
 
-- **PayAI Bazaar** — listed (`https://bazaar.payai.network`)
+- **PayAI Bazaar** — listed (`https://facilitator.payai.network/discovery/resources`)
 - **Glama** — submitted & active (`https://glama.ai/mcp/servers` — `verify-api`)
-- **MCP Registry** — published (`io.github.drain54/verify-api` v0.3.0)
+- **MCP Registry** — published (`io.github.drain54/verify-api` v1.0.0)
 - **Smithery** — connected (`https://smithery.ai/servers/indradarmawan87/verify-api`)
 
 ## Config
