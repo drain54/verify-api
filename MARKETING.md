@@ -1,81 +1,71 @@
-# Verify API — Marketing / Listing Assets
+# Verify API — Marketing & Marketplace Asset Catalog
 
-Service name: **Verify API**
-Tagline: *AI infrastructure claim verification — pay-per-query.*
-Owner: drain54
-Wallet (payTo): `0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98`
-Endpoint: `https://verify.drain54.my.id/v1/verify`
-Protocol: x402 v1
-Network: Base (eip155:8453)
-Asset: USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
-Price: `$0.01` per query (`1000000` atomic USDC)
+- **Service Name:** Verify API & Agent Tools Suite
+- **Owner / Developer:** drain54
+- **Official Gateway:** `https://verify.drain54.my.id`
+- **Protocol:** x402 V1 Pay-Per-Query & Model Context Protocol (MCP)
+- **Settlement Network:** Base Mainnet (`eip155:8453`)
+- **Settlement Token:** USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
+- **Facilitator:** `https://facilitator.payai.network`
+- **Wallet (payTo):** `0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98`
 
 ---
 
-## One-liner
-Verify API is an HTTP x402 endpoint that checks AI model, API, pricing, free-tier, endpoint availability, and region claims with fresh evidence. Pay per query; no API key needed.
+## 📌 Elevator Pitch & Ringkasan
 
-## Short description
-Verify API answers whether an AI model, API, or infrastructure claim is still true today. It returns deterministic verdicts backed by fresh evidence, sources, and caveats.
+Verify API menyediakan infrastruktur terpadu untuk AI Agent otonom:
+1. **Model Context Protocol (MCP):** 8 Tools real-time untuk mengecek kebenaran klaim teknis AI, status latensi endpoint, solver CAPTCHA otomatis, pembaca web markdown, dan ekstraktor JSON cerdas.
+2. **Apify Actors Portfolio:** 10 Aktor ekstraksi web dan scraping data publik skala besar tanpa repot mengelola proxy.
 
-## Value proposition
-- **Trust claims with evidence**: every answer includes sources, confidence, and caveats
-- **No API key, no account**: pay-per-request via x402 USDC micropayment
-- **Agent-native**: works with HTTP clients, MCP tools, and x402-enabled agents
-- **Deterministic verdicts**: TRUE / FALSE / PARTIALLY_TRUE / CHANGED / UNREACHABLE / BLOCKED / UNVERIFIED
+Semua layanan MCP dilindungi protokol micropayment **x402**: Agen membayar secara instan per request menggunakan USDC di jaringan Base tanpa perlu membuat akun atau mendaftar API key konvensional.
 
-## Input schema
-```json
-{
-  "query": "string — the claim to verify",
-  "type": "enum(claim_verify|endpoint_check|pricing_check|region_check|error_diagnosis)",
-  "depth": "enum(standard|deep) — default: standard",
-  "target_url": "string (optional)"
-}
-```
+---
 
-## Output schema
-```json
-{
-  "verdict": "TRUE|FALSE|PARTIALLY_TRUE|CHANGED|UNREACHABLE|BLOCKED|UNVERIFIED",
-  "answer": "evidence-backed answer",
-  "confidence": 0.0-1.0,
-  "sources": [{"url":"https://...","type":"official|community|news","supports":"..."}],
-  "caveats": []
-}
-```
+## 🏛️ Marketplace Presence & Status Registry
 
-## What this does NOT cover
-- General web search / open-ended research
-- Long-form document analysis
-- Training or model hosting
-- Paid-source scraping
+| Platform / Marketplace | Link Publik / Identitas | Cakupan Produk | Status Terverifikasi |
+|---|---|---|---|
+| **Official MCP Registry** | `io.github.drain54/verify-api` | 8 MCP Tools | ✅ **v1.0.0 Active** |
+| **Glama Marketplace** | `id.my.drain54.verify/verify-api` | 8 MCP Tools | ✅ **Active & Verified** |
+| **Smithery Registry** | `indradarmawan87/verify-api` | 8 MCP Tools | ✅ **Active & Re-synced** |
+| **Apify Store** | `https://apify.com/drain54` | 10 Scraper Actors | ✅ **10 Public Actors** |
+| **PayAI Bazaar** | `facilitator.payai.network/discovery/resources` | x402 Endpoints | ✅ **Catalogued** |
+| **Canopii Security** | `index.canopii.dev/server/io.github.drain54/verify-api` | Security Scoring | ✅ **Score 85/100 (B)** |
+| **MCP Queen** | `mcpqueen.com/s/io.github.drain54/verify-api` | MCP Audit Index | ⏳ *Syncing from Official Registry* |
+| **VerifyMCP** | `verifymcp.io/servers/drain54-verify-api` | Trust Score Index | ⏳ *Syncing from Official Registry* |
 
-## Use cases
-- **Model availability**: “Is GLM-5.3 Flash free on ZenMux?”
-- **Endpoint health**: “Is https://api.example.com/health reachable?”
-- **Pricing checks**: “Does provider X still have a free tier?”
-- **Region eligibility**: “Is service Y available in Indonesia?”
-- **Infra debugging**: x402 / payment / endpoint error diagnosis
+---
 
-## Compliance / buyer note
-- USDC on Base mainnet
-- Facilitator: `https://facilitator.payai.network`
-- MCP endpoint: `https://verify.drain54.my.id/mcp` (streamable-http)
-- Discovery: listed on PayAI Bazaar (`/discovery/resources`), Glama, Smithery, and Official MCP Registry (`io.github.drain54/verify-api`)
+## 🧰 Rincian 8 Tools MCP (Agent Interoperability)
 
-## Marketplace presence
+1. `verify_ai_claim` (`POST /v1/verify`)
+   - Verifikasi klaim akurasi, ketersediaan model gratis, dan status penyedia AI berbasis bukti web faktual.
+2. `check_endpoint_health` (`POST /v1/health-check`)
+   - Pengujian ketersediaan, status HTTP, dan respon waktu server target.
+3. `solve_captcha` (`POST /v1/solve-captcha`)
+   - Bypass rintangan otomatis Cloudflare Turnstile, hCaptcha, reCAPTCHA v2, dan Arkose.
+4. `get_captcha_pricing` (`GET /v1/captcha-pricing`)
+   - Transparansi tarif solver berdasarkan tingkat kesulitan jenis CAPTCHA.
+5. `read_web_page` (`POST /v1/read`)
+   - Pembersihan DOM HTML menjadi Markdown teks murni siap konsumsi LLM.
+6. `search_web` (`POST /v1/search`)
+   - Pencarian informasi web instan dengan filter relevansi tinggi.
+7. `extract_json_from_web` (`POST /v1/extract-json`)
+   - Ekstraksi langsung dari halaman web ke skema JSON terstruktur via AI.
+8. `fetch_stealth_web` (`POST /v1/fetch-stealth`)
+   - Pengambilan konten mentah halaman terproteksi dengan header stealth anti-bot.
 
-| Marketplace | Status | Notes |
-|---|---|---|
-| Official MCP Registry | published v0.4.0 | Source of truth for downstream indexes |
-| Glama | active | Connector tab, `/.well-known/glama.json` verified |
-| Smithery | connected | Free handshake for scanner validation |
-| PayAI Bazaar | listed | Auto-catalogued on first settled payment |
-| VerifyMCP | indexed | Scores the registry entry; re-scans the published URL |
-| Canopii | scored 85/100 (B) | Security index, derived from published source |
+---
 
-**Endpoint URL history:** versions `<= 0.3.0` pointed at a temporary
-`ngrok-free.dev` URL that is now dead. Current versions resolve to
-`https://verify.drain54.my.id/mcp`. If a downstream index still shows the
-ngrok URL, it is serving a stale cached copy of the registry entry.
+## 📦 Rincian 10 Actors Apify (Data Automation Suite)
+
+1. **`captcha-solver`**: Layanan API Cloud serverless penyelesai CAPTCHA on-demand.
+2. **`verify-api`**: Mesin audit klaim teknis dan verifikasi pernyataan kapabilitas AI.
+3. **`web-to-markdown`**: Parser konten web bersih untuk pipeline RAG AI.
+4. **`google-maps-leads-scraper`**: Mesin penggali kontak bisnis lokal dan lokasi Maps.
+5. **`youtube-transcript-scraper`**: Pengekstrak teks narasi dan subtitle video YouTube.
+6. **`website-contact-extractor`**: Detektor alamat email dan nomor WhatsApp/telepon pada domain.
+7. **`tiktok-trends-scraper`**: Analis tagar tren dan audio populer video TikTok.
+8. **`linkedin-jobs-scraper`**: Pengumpul lowongan pekerjaan dan profil requirement perusahaan.
+9. **`reddit-discussions-scraper`**: Penganalisis percakapan sentimen dan komentar thread Reddit.
+10. **`google-search-serp-scraper`**: Pengekstrak halaman pencarian Google SERP secara massal.
