@@ -542,6 +542,10 @@ def _mcp_rpc_response(body: dict):
     has_id = "id" in body
     req_id = body.get("id")
 
+    # Only process if this is actually a JSON-RPC request
+    if "jsonrpc" not in body and not method:
+        return None
+
     # JSON-RPC Notification (no id) -> signal 204 No Content
     if not has_id or (method and method.startswith("notifications/")):
         return {"_is_notification": True}
@@ -558,7 +562,7 @@ def _mcp_rpc_response(body: dict):
                 },
                 "serverInfo": {
                     "name": "io.github.drain54/verify-api",
-                    "version": "0.5.0"
+                    "version": "1.0.0"
                 }
             }
         }
@@ -741,25 +745,28 @@ async def captcha_health():
 @app.post("/v1/solve-captcha")
 async def solve_captcha(request: Request):
     """Solve CAPTCHA with x402 payment."""
-    body = await request.json()
-    captcha_type = body.get("type", "")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    captcha_type = body.get("type", "turnstile")
+    amount = str(CAPTCHA_PRICING.get(captcha_type, 1000))
+    resource = _get_resource(request)
+    
+    # Check payment first (standard x402 probe response)
+    payment_header = request.headers.get("X-PAYMENT")
+    if not payment_header:
+        _log({"path": "/v1/solve-captcha", "type": captcha_type, "remote": request.client.host if request.client else "unknown", "result": "402_no_payment"})
+        return JSONResponse(
+            content={"error": "payment required", "requirements": _payment_requirements(resource, amount, f"CAPTCHA solve — {captcha_type}.")},
+            status_code=402,
+            headers={"Paywall": "x402"}
+        )
     
     if captcha_type not in CAPTCHA_PRICING:
         return JSONResponse(
             content={"error": f"unsupported CAPTCHA type: {captcha_type}", "supported_types": list(CAPTCHA_PRICING.keys())},
             status_code=400,
-        )
-    
-    amount = str(CAPTCHA_PRICING[captcha_type])
-    resource = f"{request.url.scheme}://{request.url.netloc}/v1/solve-captcha"
-    
-    # Check payment
-    payment_header = request.headers.get("X-PAYMENT")
-    if not payment_header:
-        _log({"path": "/v1/solve-captcha", "type": captcha_type, "remote": request.client.host, "result": "402_no_payment"})
-        return JSONResponse(
-            content={"error": "payment required", "requirements": _payment_requirements(resource, amount, f"CAPTCHA solve — {captcha_type}.")},
-            status_code=402,
         )
     
     captcha_description = f"CAPTCHA solve — {captcha_type}."
@@ -798,10 +805,6 @@ async def read_page(request: Request):
     except Exception:
         body = {}
     
-    url = body.get("url")
-    if not url:
-        return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
-    
     base_amount = 5000  # 0.005 USDC
     amount = str(metabolism.compute_dynamic_price(base_amount))
     resource = _get_resource(request)
@@ -810,12 +813,16 @@ async def read_page(request: Request):
     payment_header = request.headers.get("X-PAYMENT")
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
-        _log({"path": "/v1/read", "url": url[:60], "remote": remote_ip, "result": "402_no_payment"})
+        _log({"path": "/v1/read", "url": str(body.get("url", ""))[:60], "remote": remote_ip, "result": "402_no_payment"})
         return Response(
             content=json.dumps(_payment_requirements(resource, amount, description)),
             status_code=402,
             headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
         )
+    
+    url = body.get("url")
+    if not url:
+        return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
     
     try:
         paid, reason = await _verify_payment(request, amount, description)
@@ -841,10 +848,7 @@ async def search_endpoint(request: Request):
         body = await request.json()
     except Exception:
         body = {}
-    query = body.get("query")
-    if not query:
-        return JSONResponse(content={"error": "missing 'query' field in request body"}, status_code=400)
-    limit = min(int(body.get("limit", 5)), 10)
+    
     base_amount = 5000  # 0.005 USDC
     amount = str(metabolism.compute_dynamic_price(base_amount))
     resource = _get_resource(request)
@@ -852,12 +856,17 @@ async def search_endpoint(request: Request):
     payment_header = request.headers.get("X-PAYMENT")
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
-        _log({"path": "/v1/search", "query": query[:60], "remote": remote_ip, "result": "402_no_payment"})
+        _log({"path": "/v1/search", "query": str(body.get("query", ""))[:60], "remote": remote_ip, "result": "402_no_payment"})
         return Response(
             content=json.dumps(_payment_requirements(resource, amount, description)),
             status_code=402,
             headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
         )
+    
+    query = body.get("query")
+    if not query:
+        return JSONResponse(content={"error": "missing 'query' field in request body"}, status_code=400)
+    limit = min(int(body.get("limit", 5)), 10)
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
@@ -880,10 +889,7 @@ async def extract_json_endpoint(request: Request):
         body = await request.json()
     except Exception:
         body = {}
-    url = body.get("url")
-    schema_def = body.get("schema")
-    if not url or schema_def is None:
-        return JSONResponse(content={"error": "missing 'url' or 'schema' field in request body"}, status_code=400)
+    
     base_amount = 15000  # 0.015 USDC
     amount = str(metabolism.compute_dynamic_price(base_amount))
     resource = _get_resource(request)
@@ -891,12 +897,17 @@ async def extract_json_endpoint(request: Request):
     payment_header = request.headers.get("X-PAYMENT")
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
-        _log({"path": "/v1/extract-json", "url": url[:60], "remote": remote_ip, "result": "402_no_payment"})
+        _log({"path": "/v1/extract-json", "url": str(body.get("url", ""))[:60], "remote": remote_ip, "result": "402_no_payment"})
         return Response(
             content=json.dumps(_payment_requirements(resource, amount, description)),
             status_code=402,
             headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
         )
+    
+    url = body.get("url")
+    schema_def = body.get("schema")
+    if not url or schema_def is None:
+        return JSONResponse(content={"error": "missing 'url' or 'schema' field in request body"}, status_code=400)
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
@@ -920,9 +931,7 @@ async def fetch_stealth_endpoint(request: Request):
         body = await request.json()
     except Exception:
         body = {}
-    url = body.get("url")
-    if not url:
-        return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
+    
     base_amount = 10000  # 0.010 USDC
     amount = str(metabolism.compute_dynamic_price(base_amount))
     resource = _get_resource(request)
@@ -930,12 +939,16 @@ async def fetch_stealth_endpoint(request: Request):
     payment_header = request.headers.get("X-PAYMENT")
     remote_ip = request.client.host if request.client else "unknown"
     if not payment_header:
-        _log({"path": "/v1/fetch-stealth", "url": url[:60], "remote": remote_ip, "result": "402_no_payment"})
+        _log({"path": "/v1/fetch-stealth", "url": str(body.get("url", ""))[:60], "remote": remote_ip, "result": "402_no_payment"})
         return Response(
             content=json.dumps(_payment_requirements(resource, amount, description)),
             status_code=402,
             headers={"Content-Type": "application/json", "Accept": "application/x402-payment-v2+json", "Paywall": "x402"}
         )
+    
+    url = body.get("url")
+    if not url:
+        return JSONResponse(content={"error": "missing 'url' field in request body"}, status_code=400)
     try:
         paid, reason = await _verify_payment(request, amount, description)
         if not paid:
