@@ -30,6 +30,8 @@ Semua layanan MCP dilindungi protokol micropayment **x402**: Agen membayar secar
 | **Smithery Registry** | `indradarmawan87/verify-api` | 8 MCP Tools | ✅ **Active & Re-synced** |
 | **Apify Store** | `https://apify.com/drain54` | 10 Scraper Actors | ✅ **10 Public Actors** |
 | **PayAI Bazaar** | `facilitator.payai.network/discovery/resources` | x402 Endpoints | ✅ **Catalogued** |
+| **x402apis.io** | `https://www.x402apis.io` (drain54-verify-api) | 7 x402 Endpoints | ✅ **Registered** |
+| **x402-list.com** | `https://x402-list.com` | 6 x402 Endpoints | ⏳ **Scheduled (11 Oct 2026)** |
 | **Canopii Security** | `index.canopii.dev/server/io.github.drain54/verify-api` | Security Scoring | ✅ **Score 85/100 (B)** |
 | **MCP Queen** | `mcpqueen.com/s/io.github.drain54/verify-api` | MCP Audit Index | ⏳ *Syncing from Official Registry* |
 | **VerifyMCP** | `verifymcp.io/servers/drain54-verify-api` | Trust Score Index | ⏳ *Syncing from Official Registry* |

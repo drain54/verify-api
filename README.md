@@ -60,6 +60,8 @@ Daftar aktor cloud serverless aktif di akun Apify (`drain54`) untuk automasi dat
 | **PayAI Bazaar** | `/discovery/resources` | ✅ **Listed** | x402 Endpoints | Terdaftar di katalog facilitator PayAI on-chain Base. |
 | **MCP Queen** | `io.github.drain54/verify-api` | ⏳ *Auto-Syncing* | - | Scanner membaca v1.0.0 dari Official Registry (siklus ~2.7 hari). |
 | **VerifyMCP** | `drain54-verify-api` | ⏳ *Auto-Syncing* | - | Scanner independen menyerap update dari Official Registry. |
+| **x402apis.io** | `drain54-verify-api` | ✅ **Registered** | 7 x402 APIs | Terdaftar di Decentralized API Registry via on-chainBase & wallet mapping. |
+| **x402-list.com** | `verify.drain54.my.id` | ⏳ **Scheduled (11 Oct 2026)** | 6 x402 Endpoints | Auto-cron resubmit terjadwal pasca-cooling period (spec compliant `accepts[]`). |
 | **Canopii** | `io.github.drain54/verify-api` | ✅ **Score 85/100 (B)** | Metadata | Index audit keamanan & transparansi MCP. |
 
 ---
