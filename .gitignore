@@ -11,3 +11,5 @@ remediate_state.json
 remediate_nonces.json
 .venv/
 expansion.jsonl
+cognition.jsonl
+expansion.jsonl

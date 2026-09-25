@@ -94,7 +94,21 @@ def tunnel_alive() -> bool:
         with urllib.request.urlopen(req, timeout=8) as resp:
             return resp.status == 200
     except Exception:
-        return False
+        pass
+    return False
+
+
+def tunnel_status_code():
+    """Return (reachable, http_code). Used to tell a 5xx apart from a dead host."""
+    try:
+        req = urllib.request.Request(f"{PUBLIC_URL}/.well-known/glama.json",
+                                     headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            return True, resp.status
+    except urllib.error.HTTPError as e:
+        return True, e.code
+    except Exception:
+        return False, None
 
 
 # ---------------------------------------------------------------- ACTIONS
@@ -322,9 +336,11 @@ def propose(action: str, reason: str, diagnosis: dict, auto: bool):
 # ---------------------------------------------------------------- MAIN CYCLE
 
 def diagnose() -> dict:
+    t_ok, t_code = tunnel_status_code()
     d: dict = {"mw_port": bool(port_alive(MW_PORT)),
          "solver_port": bool(port_alive(SOLVER_PORT)),
-         "tunnel": bool(tunnel_alive()),
+         "tunnel": t_ok,
+         "tunnel_http": t_code,
          "mw_proc": bool(proc_running("x402_mw.py")),
          "solver_proc": bool(proc_running("solver_backend.py"))}
     try:
@@ -333,6 +349,32 @@ def diagnose() -> dict:
     except Exception:
         d["disk_free_pct"] = None
     return d
+
+
+def _brain_advisory(d: dict) -> list:
+    """Consult the lightweight brain ONLY for states the rules cannot decide.
+
+    Returns a list of proposals (never executes). Everything the deterministic
+    rules already handle never reaches the brain.
+    """
+    import cognition
+
+    suggestions = []
+
+    # TCP accepts but health fails -> hung worker, wrong route, or slow dep?
+    for label, port in (("mw", MW_PORT), ("solver", SOLVER_PORT)):
+        if d.get(f"{label}_proc") and not d.get(f"{label}_port"):
+            v = cognition.think("port_alive_but_not_serving", d)
+            if v.get("next_action") and v["next_action"] != "none":
+                suggestions.append((v["next_action"], d, v))
+
+    # Public URL returns 5xx rather than a clean failure
+    if not d.get("tunnel") and d.get("tunnel_http"):
+        v = cognition.think("tunnel_5xx", d)
+        if v.get("next_action") and v["next_action"] != "none":
+            suggestions.append((v["next_action"], d, v))
+
+    return suggestions
 
 
 def remediate_cycle(require_confirmation_rounds: int = 2) -> dict:
@@ -345,6 +387,7 @@ def remediate_cycle(require_confirmation_rounds: int = 2) -> dict:
         return fails[key]
 
     executed = []
+    advised = []
 
     # Solver backend
     if bump("solver", not d["solver_port"]) >= require_confirmation_rounds:
@@ -373,10 +416,17 @@ def remediate_cycle(require_confirmation_rounds: int = 2) -> dict:
     if d.get("disk_free_pct") is not None and d["disk_free_pct"] < 10:
         propose("flush_logs", f"Disk free only {d['disk_free_pct']}%", d, auto=False)
 
+    # Ambiguous states -> brain suggests, human decides (never auto-executes)
+    for action, diag, verdict in _brain_advisory(d):
+        reason = (f"Brain verdict: {verdict.get('verdict')} "
+                  f"(confidence {verdict.get('confidence')}) — {verdict.get('reason')}")
+        propose(action, reason, diag, auto=False)
+        advised.append({"action": action, "verdict": verdict})
+
     state["consecutive_failures"] = fails
     save_state(state)
-    _log({"event": "cycle", "diagnosis": d, "executed": executed})
-    return {"diagnosis": d, "executed": executed}
+    _log({"event": "cycle", "diagnosis": d, "executed": executed, "advised": advised})
+    return {"diagnosis": d, "executed": executed, "brain_advised": advised}
 
 
 def approve(action: str) -> dict:
