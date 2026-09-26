@@ -21,21 +21,29 @@ from ssrf_guard import is_safe_url
 
 import mpp
 from mpp import Challenge, Credential, Receipt
+import mpp.methods.tempo as tempo
+from mpp.methods.tempo.intents import ChargeIntent
 
 router = APIRouter(prefix="/mpp", tags=["mpp"])
 
 LOG_PATH = Path(__file__).parent / "usage.jsonl"
-WALLET = os.getenv("X402_WALLET", "")
-USDC = os.getenv("X402_USDC", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
+WALLET = os.getenv("X402_WALLET", "0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98")
+# Official Tempo L1 USDC token contract
+TEMPO_USDC = getattr(tempo, "USDC", "0x20C000000000000000000000b9537d11c60E8b50")
+TEMPO_CHAIN_ID = getattr(tempo, "CHAIN_ID", 4217)
 MPP_SECRET = os.getenv("MPP_SECRET_KEY", "mpp-server-secret-drain54-verify")
 
-PRICES_USD = {
-    "standard": "0.01",
-    "deep": "0.03",
-    "reader": "0.005",
-    "extract_json": "0.01",
-    "stealth": "0.01",
+# Amounts in Tempo USDC units (micro-USDC: 1 USD = 1,000,000 units)
+PRICES_UNITS = {
+    "standard": 10000,    # $0.010 USD
+    "deep": 30000,        # $0.030 USD
+    "reader": 5000,       # $0.005 USD
+    "extract_json": 10000,# $0.010 USD
+    "stealth": 10000,     # $0.010 USD
 }
+
+# Live charge intent instance bound to Tempo Mainnet RPC
+_tempo_charge_intent = ChargeIntent(chain_id=TEMPO_CHAIN_ID)
 
 def _log_mpp(event: dict):
     try:
@@ -48,11 +56,11 @@ def _get_realm(request: Request) -> str:
     host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "verify.drain54.my.id"
     return host.split(":")[0]
 
-def _mpp_402_challenge(request: Request, amount: str, description: str, currency: str = USDC, recipient: str = WALLET) -> Response:
+def _mpp_402_challenge(request: Request, amount_units: int, description: str, currency: str = TEMPO_USDC, recipient: str = WALLET) -> Response:
     """Create IETF compliant HTTP 402 with WWW-Authenticate: Payment header."""
     realm = _get_realm(request)
     req_payload = {
-        "amount": amount,
+        "amount": str(amount_units),
         "currency": currency,
         "recipient": recipient,
     }
@@ -77,7 +85,10 @@ def _mpp_402_challenge(request: Request, amount: str, description: str, currency
             "protocol": "mpp",
             "method": "tempo",
             "intent": "charge",
-            "amount": amount,
+            "amount": str(amount_units / 1_000_000),
+            "amount_units": str(amount_units),
+            "currency": currency,
+            "chain_id": TEMPO_CHAIN_ID,
             "description": description,
         }),
         media_type="application/json",
@@ -87,33 +98,48 @@ def _mpp_402_challenge(request: Request, amount: str, description: str, currency
         }
     )
 
-async def _verify_mpp_auth(request: Request, expected_amount: str, description: str) -> tuple[bool, str | None, Response | None]:
-    """Parse and verify Payment authorization header. Returns (paid, error_reason, response_if_not_paid)."""
+async def _verify_mpp_auth(request: Request, expected_amount_units: int, description: str) -> tuple[bool, str | None, Response | None]:
+    """Parse and verify Payment authorization header via live Tempo RPC settlement.
+    Returns (paid, receipt_header_if_paid, response_if_not_paid)."""
     auth_header = request.headers.get("Authorization") or request.headers.get("Payment-Authorization")
     if not auth_header or not auth_header.startswith("Payment "):
         # Return 402 challenge
-        return False, None, _mpp_402_challenge(request, expected_amount, description)
+        return False, None, _mpp_402_challenge(request, expected_amount_units, description)
     
     try:
         credential = Credential.from_authorization(auth_header)
         realm = _get_realm(request)
         
-        # Verify request amount
+        # Verify challenge authenticity against server secret if available
+        if hasattr(credential.challenge, "verify") and callable(getattr(credential.challenge, "verify")):
+            valid_hmac = credential.challenge.verify(MPP_SECRET, realm)
+            if not valid_hmac:
+                return False, None, JSONResponse(status_code=400, content={"error": "Invalid challenge HMAC signature"})
+        
+        # Decode request payload
         req_b64 = credential.challenge.request
         pad = len(req_b64) % 4
         req_b64_padded = req_b64 + ("=" * (4 - pad)) if pad else req_b64
         decoded_req = json.loads(base64.urlsafe_b64decode(req_b64_padded).decode())
         
-        if str(decoded_req.get("amount")) != str(expected_amount):
-            return False, "Amount mismatch", JSONResponse(status_code=400, content={"error": "Amount mismatch in credential"})
+        # Verify amount & recipient
+        req_amount = str(decoded_req.get("amount", ""))
+        if req_amount != str(expected_amount_units):
+            return False, None, JSONResponse(
+                status_code=400,
+                content={"error": f"Amount mismatch: expected {expected_amount_units} units, got {req_amount}"}
+            )
             
-        receipt = Receipt.success(
-            reference=f"mpp_ref_{uuid.uuid4().hex[:16]}",
-            method=credential.challenge.method or "tempo"
-        )
-        return True, receipt.to_payment_receipt(), None
+        # Live Settlement Verification via Tempo RPC
+        receipt = await _tempo_charge_intent.broadcast(credential, decoded_req)
+        receipt_header = receipt.to_payment_receipt()
+        
+        return True, receipt_header, None
+        
     except Exception as e:
-        return False, str(e), JSONResponse(status_code=400, content={"error": f"Invalid payment credential: {e}"})
+        error_msg = f"{type(e).__name__}: {e}"
+        _log_mpp({"event": "mpp_verification_failed", "error": error_msg})
+        return False, None, JSONResponse(status_code=402, content={"error": f"Payment settlement failed: {error_msg}"})
 
 @router.get("/v1/info")
 async def mpp_info(request: Request):
@@ -123,11 +149,17 @@ async def mpp_info(request: Request):
         "specification": "draft-ryan-httpauth-payment",
         "supported_methods": ["tempo"],
         "supported_intents": ["charge"],
+        "settlement": {
+            "chain_id": TEMPO_CHAIN_ID,
+            "currency": TEMPO_USDC,
+            "recipient": WALLET,
+            "rpc_url": "https://rpc.tempo.xyz"
+        },
         "endpoints": [
-            {"path": "/mpp/v1/verify", "price_usd": PRICES_USD["standard"]},
-            {"path": "/mpp/v1/read", "price_usd": PRICES_USD["reader"]},
-            {"path": "/mpp/v1/extract-json", "price_usd": PRICES_USD["extract_json"]},
-            {"path": "/mpp/v1/fetch-stealth", "price_usd": PRICES_USD["stealth"]},
+            {"path": "/mpp/v1/verify", "price_usd": "0.01", "units": PRICES_UNITS["standard"]},
+            {"path": "/mpp/v1/read", "price_usd": "0.005", "units": PRICES_UNITS["reader"]},
+            {"path": "/mpp/v1/extract-json", "price_usd": "0.01", "units": PRICES_UNITS["extract_json"]},
+            {"path": "/mpp/v1/fetch-stealth", "price_usd": "0.01", "units": PRICES_UNITS["stealth"]},
         ]
     }
 
@@ -139,10 +171,10 @@ async def mpp_verify_endpoint(request: Request):
         body = {}
     
     depth = (body.get("depth") or "standard").lower()
-    amt = PRICES_USD.get(depth, PRICES_USD["standard"])
-    desc = f"AI infrastructure claim verification via MPP - {depth} depth (${amt} USD)."
+    amt_units = PRICES_UNITS.get(depth, PRICES_UNITS["standard"])
+    desc = f"AI infrastructure claim verification via MPP - {depth} depth (${amt_units/1e6:.4f} USD)."
     
-    paid, receipt_header, fail_response = await _verify_mpp_auth(request, amt, desc)
+    paid, receipt_header, fail_response = await _verify_mpp_auth(request, amt_units, desc)
     if not paid:
         _log_mpp({"path": "/mpp/v1/verify", "result": "402_challenge", "remote": request.client.host if request.client else "unknown"})
         return fail_response
@@ -166,10 +198,10 @@ async def mpp_read_endpoint(request: Request):
     except Exception:
         body = {}
     
-    amt = PRICES_USD["reader"]
-    desc = f"Read and extract clean markdown content from URL via MPP (${amt} USD)."
+    amt_units = PRICES_UNITS["reader"]
+    desc = f"Read and extract clean markdown content from URL via MPP (${amt_units/1e6:.4f} USD)."
     
-    paid, receipt_header, fail_response = await _verify_mpp_auth(request, amt, desc)
+    paid, receipt_header, fail_response = await _verify_mpp_auth(request, amt_units, desc)
     if not paid:
         _log_mpp({"path": "/mpp/v1/read", "result": "402_challenge", "remote": request.client.host if request.client else "unknown"})
         return fail_response
@@ -199,10 +231,10 @@ async def mpp_extract_json_endpoint(request: Request):
     except Exception:
         body = {}
         
-    amt = PRICES_USD["extract_json"]
-    desc = f"Extract structured JSON data from webpage via MPP (${amt} USD)."
+    amt_units = PRICES_UNITS["extract_json"]
+    desc = f"Extract structured JSON data from webpage via MPP (${amt_units/1e6:.4f} USD)."
     
-    paid, receipt_header, fail_response = await _verify_mpp_auth(request, amt, desc)
+    paid, receipt_header, fail_response = await _verify_mpp_auth(request, amt_units, desc)
     if not paid:
         _log_mpp({"path": "/mpp/v1/extract-json", "result": "402_challenge", "remote": request.client.host if request.client else "unknown"})
         return fail_response
@@ -232,10 +264,10 @@ async def mpp_fetch_stealth_endpoint(request: Request):
     except Exception:
         body = {}
         
-    amt = PRICES_USD["stealth"]
-    desc = f"Stealth web fetcher via MPP (${amt} USD)."
+    amt_units = PRICES_UNITS["stealth"]
+    desc = f"Stealth web fetcher via MPP (${amt_units/1e6:.4f} USD)."
     
-    paid, receipt_header, fail_response = await _verify_mpp_auth(request, amt, desc)
+    paid, receipt_header, fail_response = await _verify_mpp_auth(request, amt_units, desc)
     if not paid:
         _log_mpp({"path": "/mpp/v1/fetch-stealth", "result": "402_challenge", "remote": request.client.host if request.client else "unknown"})
         return fail_response
