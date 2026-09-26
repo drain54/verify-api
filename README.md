@@ -1,13 +1,30 @@
 # Verify API & Agent Tools Suite
 
-Suite perkakas agen AI cerdas dan verifikasi klaim infrastruktur AI berbasis micropayment **x402 (USDC on Base)** dan **MCP (Model Context Protocol)**.
+Suite perkakas agen AI cerdas dan verifikasi klaim infrastruktur AI berbasis arsitektur **Dual-Protocol Micropayment**: **x402 (Base USDC)** & **MPP (Tempo USDC)**, serta antarmuka **MCP (Model Context Protocol)** untuk pemanggilan alat secara native oleh LLM.
 
 - **Primary Gateway:** `https://verify.drain54.my.id`
-- **Protocol:** MCP streamable-http, SSE, and x402 V1 Pay-Per-Query
-- **Network:** Base Mainnet (`eip155:8453`)
-- **Payment Facilitator:** `https://facilitator.payai.network`
-- **Settlement Wallet (payTo):** `0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98`
-- **Settlement Asset:** USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
+- **Supported Payment Protocols:**
+  - **x402:** Pay-per-query via Base Mainnet (`eip155:8453`) USDC
+  - **MPP (Machine Payments Protocol):** Standard IETF RFC 9110 HTTP Auth via Tempo L1 USDC
+- **Discovery Manifests:**
+  - OpenAPI 3.1 Spec: `https://verify.drain54.my.id/openapi.json`
+  - MPP Discovery: `https://verify.drain54.my.id/.well-known/mpp.json`
+  - MCP Server Card: `https://verify.drain54.my.id/.well-known/mcp/server-card.json`
+  - Glama Connector: `https://verify.drain54.my.id/.well-known/glama.json`
+- **Settlement Wallet:** `0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98`
+
+---
+
+## ⚡ Protokol Pembayaran: x402 vs MPP
+
+API ini melayani dua jenis agen AI secara berdampingan tanpa saling mengganggu:
+
+| Dimensi | ⚡ x402 Endpoints (`/v1/*`) | 💳 MPP Endpoints (`/mpp/v1/*`) |
+|---|---|---|
+| **Standar HTTP** | Custom Header (`Paywall: x402`, `Accept: application/x402-payment-v2+json`) | IETF RFC 9110 (`WWW-Authenticate: Payment`, `Authorization: Payment`) |
+| **Settlement Rail** | Base Mainnet (EVM USDC) | Tempo L1 (USDC) |
+| **Target Ekosistem** | Glama, Smithery, PayAI, x402apis.io | MPPscan, Poncho, AgentCash, Claude/Cursor MPP agents |
+| **Panduan Khusus** | [README.md](#1-model-context-protocol-mcp--8-tools-aktif) | [MPP.md](MPP.md) (Dokumentasi Lengkap MPP) |
 
 ---
 
@@ -61,6 +78,7 @@ Daftar aktor cloud serverless aktif di akun Apify (`drain54`) untuk automasi dat
 | **MCP Queen** | `io.github.drain54/verify-api` | ⏳ *Auto-Syncing* | - | Scanner membaca v1.0.0 dari Official Registry (siklus ~2.7 hari). |
 | **VerifyMCP** | `drain54-verify-api` | ⏳ *Auto-Syncing* | - | Scanner independen menyerap update dari Official Registry. |
 | **x402apis.io** | `drain54-verify-api` | ✅ **Registered** | 7 x402 APIs | Terdaftar di Decentralized API Registry via on-chainBase & wallet mapping. |
+| **MPPscan** | `verify.drain54.my.id` | ✅ **Live & Verified** | 4 MPP Endpoints | Terdaftar di Machine Payments Protocol Explorer & Poncho storefront (`/server/4abfa95c...`). |
 | **x402-list.com** | `verify.drain54.my.id` | ⏳ **Scheduled (11 Oct 2026)** | 6 x402 Endpoints | Auto-cron resubmit terjadwal pasca-cooling period (spec compliant `accepts[]`). |
 | **Canopii** | `io.github.drain54/verify-api` | ✅ **Score 85/100 (B)** | Metadata | Index audit keamanan & transparansi MCP. |
 
