@@ -20,6 +20,7 @@ from json_extractor import extract_structured_json  # noqa: E402
 from stealth_fetcher import fetch_stealth  # noqa: E402
 from metabolism import metabolism  # noqa: E402
 from ssrf_guard import is_safe_url  # noqa: E402
+from mpp_router import router as mpp_router  # noqa: E402
 
 FACILITATOR = os.getenv("X402_FACILITATOR_URL", "https://facilitator.payai.network")
 WALLET = os.getenv("X402_WALLET", "")
@@ -219,6 +220,7 @@ async def lifespan(app: FastAPI):
     meta_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(mpp_router)
 
 TOOLS_DEFINITION = [
     {
@@ -982,6 +984,13 @@ async def glama_verification():
         "$schema": "https://glama.ai/mcp/schemas/connector.json",
         "claim": "glama_claim_LB7BptXsCj5cX4_aN0kLEMNZVZqQiPyD"
     }
+
+@app.get("/.well-known/mpp.json")
+async def mpp_discovery_manifest():
+    manifest_path = Path(__file__).parent / "mpp_manifest.json"
+    if manifest_path.is_file():
+        return json.loads(manifest_path.read_text())
+    return JSONResponse(status_code=404, content={"error": "mpp manifest not found"})
 
 @app.get("/.well-known/mcp/server-card.json")
 async def server_card():

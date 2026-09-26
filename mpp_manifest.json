@@ -1,0 +1,94 @@
+{
+  "protocol": "mpp",
+  "version": 1,
+  "spec_version": "0.1",
+  "name": "Verify API",
+  "description": "Deterministic fact-checking, AI infrastructure claims verification, stealth web extraction, and structured scraping for autonomous agents.",
+  "realm": "verify.drain54.my.id",
+  "base_url": "https://verify.drain54.my.id",
+  "payment_methods": [
+    {
+      "method": "tempo",
+      "intents": ["charge"],
+      "chains": [
+        {
+          "chain_id": 4217,
+          "name": "Tempo Mainnet",
+          "currency": "USDC",
+          "recipient": "0xd477295C0Fe6Be96CaDd3d5B6B3eB82B16eADa98"
+        }
+      ]
+    }
+  ],
+  "challenge": {
+    "http_status": 402,
+    "header": "WWW-Authenticate",
+    "scheme": "Payment"
+  },
+  "receipts": {
+    "header": "Payment-Receipt"
+  },
+  "routes": [
+    {
+      "path": "/mpp/v1/verify",
+      "method": "POST",
+      "description": "Verify AI infrastructure claims with web evidence and deterministic verdicts.",
+      "price_usd_per_call": "0.01",
+      "intent": "charge",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Specific AI claim or assertion" },
+          "depth": { "type": "string", "enum": ["standard", "deep"], "default": "standard" }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "path": "/mpp/v1/read",
+      "method": "POST",
+      "description": "Read and extract clean markdown content from URL.",
+      "price_usd_per_call": "0.005",
+      "intent": "charge",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "Target webpage URL" },
+          "include_links": { "type": "boolean", "default": true },
+          "include_images": { "type": "boolean", "default": false }
+        },
+        "required": ["url"]
+      }
+    },
+    {
+      "path": "/mpp/v1/extract-json",
+      "method": "POST",
+      "description": "Extract structured JSON data matching custom schema from target webpage.",
+      "price_usd_per_call": "0.01",
+      "intent": "charge",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "Target webpage URL" },
+          "schema": { "type": "object", "description": "JSON schema definition" },
+          "instructions": { "type": "string", "description": "Extraction guidelines" }
+        },
+        "required": ["url", "schema"]
+      }
+    },
+    {
+      "path": "/mpp/v1/fetch-stealth",
+      "method": "POST",
+      "description": "Fetch webpage HTML with anti-bot challenge detection and stealth headers.",
+      "price_usd_per_call": "0.01",
+      "intent": "charge",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "Target webpage URL" }
+        },
+        "required": ["url"]
+      }
+    }
+  ]
+}
