@@ -159,7 +159,21 @@ class ForagerEngine:
             except Exception as e:
                 results["mcp_server_card"] = f"FAIL_{type(e).__name__}"
 
-            # 3. PayAI Facilitator Discovery Reachability
+            # 3. MPP Manifest Discovery Check
+            try:
+                r = await client.get(f"{self.public_url}/.well-known/mpp.json")
+                results["mpp_discovery"] = "HEALTHY" if r.status_code == 200 else f"HTTP_{r.status_code}"
+            except Exception as e:
+                results["mpp_discovery"] = f"FAIL_{type(e).__name__}"
+
+            # 4. MPPscan Server Explorer Check
+            try:
+                r = await client.get("https://mppscan.com/server/4abfa95cf527d4717accc0d81b03a9b7458bf2dbfc1a2977d0d68a63cd2a0d02")
+                results["mppscan_listing"] = "HEALTHY" if r.status_code == 200 else f"HTTP_{r.status_code}"
+            except Exception as e:
+                results["mppscan_listing"] = f"FAIL_{type(e).__name__}"
+
+            # 5. PayAI Facilitator Discovery Reachability
             try:
                 r = await client.get("https://facilitator.payai.network/discovery/resources?limit=1")
                 results["payai_facilitator"] = "REACHABLE" if r.status_code == 200 else f"HTTP_{r.status_code}"
