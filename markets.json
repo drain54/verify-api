@@ -38,5 +38,13 @@
     "verified": true,
     "established": true,
     "registered_at": "2026-09-26T02:04:00+00:00"
+  },
+  {
+    "name": "mpp_official_directory",
+    "url": "https://github.com/tempoxyz/mpp/pull/1017",
+    "evidence": "PR #1017 opened against tempoxyz/mpp main branch (schemas/services.ts).",
+    "verified": true,
+    "established": false,
+    "registered_at": "2026-09-26T03:30:00+00:00"
   }
 ]

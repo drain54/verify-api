@@ -79,6 +79,7 @@ Daftar aktor cloud serverless aktif di akun Apify (`drain54`) untuk automasi dat
 | **VerifyMCP** | `drain54-verify-api` | ⏳ *Auto-Syncing* | - | Scanner independen menyerap update dari Official Registry. |
 | **x402apis.io** | `drain54-verify-api` | ✅ **Registered** | 7 x402 APIs | Terdaftar di Decentralized API Registry via on-chainBase & wallet mapping. |
 | **MPPscan** | `verify.drain54.my.id` | ✅ **Live & Verified** | 4 MPP Endpoints | Terdaftar di Machine Payments Protocol Explorer & Poncho storefront (`/server/4abfa95c...`). |
+| **mpp.dev/services** | `verify-api` | ⏳ **PR Submitted (#1017)** | 5 MPP Endpoints | Menunggu merge pull request kurasi direktori resmi Stripe & Tempo. |
 | **x402-list.com** | `verify.drain54.my.id` | ⏳ **Scheduled (11 Oct 2026)** | 6 x402 Endpoints | Auto-cron resubmit terjadwal pasca-cooling period (spec compliant `accepts[]`). |
 | **Canopii** | `io.github.drain54/verify-api` | ✅ **Score 85/100 (B)** | Metadata | Index audit keamanan & transparansi MCP. |
 
