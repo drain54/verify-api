@@ -64,7 +64,7 @@ def main():
         "service_name": "Verify API & Agent Tools Suite",
         "service_url": "https://verify.drain54.my.id",
         "website_url": "https://github.com/drain54/verify-api",
-        "email": "indradarmawan87@gmail.com",
+        "email": "thekaioshin@gmail.com",
         "category": "Verification",
         "description": "Multi-utility AI Agent suite: Claim Verification + Web-to-Markdown Reader + Live Search + JSON Extraction + Stealth Fetch + CAPTCHA Solving — pay-per-use via x402 on Base USDC. Note: /v1/verify costs 1.00 USDC per call.",
         "endpoints": "/v1/verify\n/v1/read\n/v1/search\n/v1/extract-json\n/v1/fetch-stealth\n/v1/solve-captcha",

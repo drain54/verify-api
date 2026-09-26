@@ -1017,7 +1017,7 @@ async def server_card():
         "author": {
             "name": "drain54",
             "url": "https://github.com/drain54",
-            "email": "indradarmawan87@gmail.com"
+            "email": "thekaioshin@gmail.com"
         },
         "publisher": {
             "name": "drain54",
@@ -1025,7 +1025,7 @@ async def server_card():
         },
         "support": {
             "url": "https://github.com/drain54/verify-api/issues",
-            "email": "indradarmawan87@gmail.com"
+            "email": "thekaioshin@gmail.com"
         },
         "homepage": "https://smithery.ai/servers/indradarmawan87/verify-api",
         "repository": {
