@@ -56,12 +56,16 @@ def _mpp_402_challenge(request: Request, amount: str, description: str, currency
         "currency": currency,
         "recipient": recipient,
     }
+    # RFC 3339 timestamp (expires in 15 minutes)
+    expires_at = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() + 900, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    
     challenge = Challenge.create(
         secret_key=MPP_SECRET,
         realm=realm,
         method="tempo",
         intent="charge",
         request=req_payload,
+        expires=expires_at,
         description=description,
     )
     www_auth_value = challenge.to_www_authenticate(realm=realm)

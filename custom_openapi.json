@@ -1,0 +1,302 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Verify API",
+    "version": "1.0.0",
+    "description": "Multi-utility AI Agent suite: Claim Verification, Web Reader, Live Search, Structured JSON Extraction, Stealth Web Fetcher, and CAPTCHA Solving \u2014 pay-per-use via x402 and MPP.",
+    "x-guidance": "Verify API provides deterministic fact-checking, deep content extraction, and stealth browsing for autonomous agents. Call /mpp/v1/* endpoints for MPP payments on Tempo.",
+    "contact": {
+      "name": "drain54",
+      "email": "indradarmawan87@gmail.com",
+      "url": "https://verify.drain54.my.id"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://verify.drain54.my.id"
+    }
+  ],
+  "paths": {
+    "/mpp/v1/info": {
+      "get": {
+        "summary": "MPP Protocol Metadata",
+        "operationId": "mpp_info",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "MPP service info and capabilities"
+          }
+        }
+      }
+    },
+    "/mpp/v1/verify": {
+      "post": {
+        "summary": "Verify AI Claim (MPP)",
+        "operationId": "mpp_verify",
+        "description": "Verify AI infrastructure claims with deterministic evidence.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "AI infrastructure claim to verify"
+                  },
+                  "depth": {
+                    "type": "string",
+                    "enum": [
+                      "standard",
+                      "deep"
+                    ],
+                    "default": "standard"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "x-payment-info": {
+          "price": {
+            "mode": "fixed",
+            "currency": "USD",
+            "amount": "0.01"
+          },
+          "protocols": [
+            {
+              "mpp": {
+                "method": "tempo",
+                "intent": "charge",
+                "currency": "USDC"
+              }
+            }
+          ]
+        },
+        "responses": {
+          "200": {
+            "description": "Verification result"
+          },
+          "402": {
+            "description": "Payment Required"
+          }
+        }
+      }
+    },
+    "/mpp/v1/read": {
+      "post": {
+        "summary": "Read Webpage Markdown (MPP)",
+        "operationId": "mpp_read",
+        "description": "Extract clean markdown from URL.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Target webpage URL"
+                  },
+                  "include_links": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "include_images": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "x-payment-info": {
+          "price": {
+            "mode": "fixed",
+            "currency": "USD",
+            "amount": "0.005"
+          },
+          "protocols": [
+            {
+              "mpp": {
+                "method": "tempo",
+                "intent": "charge",
+                "currency": "USDC"
+              }
+            }
+          ]
+        },
+        "responses": {
+          "200": {
+            "description": "Markdown result"
+          },
+          "402": {
+            "description": "Payment Required"
+          }
+        }
+      }
+    },
+    "/mpp/v1/extract-json": {
+      "post": {
+        "summary": "Extract Structured JSON (MPP)",
+        "operationId": "mpp_extract_json",
+        "description": "Extract JSON from URL matching schema.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Target webpage URL"
+                  },
+                  "schema": {
+                    "type": "object",
+                    "description": "JSON schema to extract"
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "Parsing guidelines"
+                  }
+                },
+                "required": [
+                  "url",
+                  "schema"
+                ]
+              }
+            }
+          }
+        },
+        "x-payment-info": {
+          "price": {
+            "mode": "fixed",
+            "currency": "USD",
+            "amount": "0.01"
+          },
+          "protocols": [
+            {
+              "mpp": {
+                "method": "tempo",
+                "intent": "charge",
+                "currency": "USDC"
+              }
+            }
+          ]
+        },
+        "responses": {
+          "200": {
+            "description": "Extracted JSON"
+          },
+          "402": {
+            "description": "Payment Required"
+          }
+        }
+      }
+    },
+    "/mpp/v1/fetch-stealth": {
+      "post": {
+        "summary": "Stealth Web Fetcher (MPP)",
+        "operationId": "mpp_fetch_stealth",
+        "description": "Stealth fetch webpage with bot detection.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Target webpage URL"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "x-payment-info": {
+          "price": {
+            "mode": "fixed",
+            "currency": "USD",
+            "amount": "0.01"
+          },
+          "protocols": [
+            {
+              "mpp": {
+                "method": "tempo",
+                "intent": "charge",
+                "currency": "USDC"
+              }
+            }
+          ]
+        },
+        "responses": {
+          "200": {
+            "description": "Fetched HTML"
+          },
+          "402": {
+            "description": "Payment Required"
+          }
+        }
+      }
+    },
+    "/.well-known/mpp.json": {
+      "get": {
+        "summary": "MPP Discovery Manifest",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "MPP JSON manifest"
+          }
+        }
+      }
+    },
+    "/.well-known/glama.json": {
+      "get": {
+        "summary": "Glama Connector",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Glama claim"
+          }
+        }
+      }
+    },
+    "/.well-known/mcp/server-card.json": {
+      "get": {
+        "summary": "MCP Server Card",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Server card"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  }
+}

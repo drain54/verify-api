@@ -219,7 +219,14 @@ async def lifespan(app: FastAPI):
     task.cancel()
     meta_task.cancel()
 
+def custom_openapi():
+    spec_path = Path(__file__).parent / "custom_openapi.json"
+    if spec_path.is_file():
+        return json.loads(spec_path.read_text())
+    return app.openapi()
+
 app = FastAPI(lifespan=lifespan)
+app.openapi = custom_openapi
 app.include_router(mpp_router)
 
 TOOLS_DEFINITION = [
@@ -991,6 +998,13 @@ async def mpp_discovery_manifest():
     if manifest_path.is_file():
         return json.loads(manifest_path.read_text())
     return JSONResponse(status_code=404, content={"error": "mpp manifest not found"})
+
+@app.get("/openapi.json")
+async def custom_openapi_spec():
+    spec_path = Path(__file__).parent / "custom_openapi.json"
+    if spec_path.is_file():
+        return json.loads(spec_path.read_text())
+    return app.openapi()
 
 @app.get("/.well-known/mcp/server-card.json")
 async def server_card():

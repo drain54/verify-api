@@ -30,5 +30,13 @@
     "verified": true,
     "established": true,
     "registered_at": "2026-09-19T00:20:00+00:00"
+  },
+  {
+    "name": "mppscan",
+    "url": "https://mppscan.com/server/4abfa95cf527d4717accc0d81b03a9b7458bf2dbfc1a2977d0d68a63cd2a0d02",
+    "evidence": "Registered via MPPscan API. 4 endpoints verified active (HTTP 402 with WWW-Authenticate: Payment on Tempo).",
+    "verified": true,
+    "established": true,
+    "registered_at": "2026-09-26T02:04:00+00:00"
   }
 ]
