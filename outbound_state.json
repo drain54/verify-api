@@ -1,0 +1,16 @@
+{
+  "total_tasks_completed": 0,
+  "last_poll_ts": "2026-09-29T13:39:10.037245+00:00",
+  "last_act_runs": {
+    "captcha-solver": 48,
+    "verify-api": 24,
+    "web-to-markdown": 9,
+    "google-maps-leads-scraper": 13,
+    "youtube-transcript-scraper": 13,
+    "website-contact-extractor": 11,
+    "tiktok-trends-scraper": 9,
+    "linkedin-jobs-scraper": 5,
+    "reddit-discussions-scraper": 5,
+    "google-search-serp-scraper": 5
+  }
+}

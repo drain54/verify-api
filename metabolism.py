@@ -5,6 +5,7 @@ import httpx
 from datetime import datetime, timezone
 from pathlib import Path
 from forager import forager, DAILY_COMPUTE_BURN_USDC
+import outbound_worker
 
 # Load .env if present
 _env = Path(__file__).parent / ".env"
@@ -79,6 +80,7 @@ class MetabolismManager:
         return self.get_state()
 
     def get_state(self) -> dict:
+        outbound_state = outbound_worker.load_state()
         return {
             "state": self.state,
             "wallet": self.wallet,
@@ -87,6 +89,7 @@ class MetabolismManager:
             "multiplier": self.multiplier,
             "daily_burn_usdc": DAILY_COMPUTE_BURN_USDC,
             "foraging": forager.get_summary(),
+            "outbound_tasks_completed": outbound_state.get("total_tasks_completed", 0),
             "last_updated": datetime.fromtimestamp(self.last_updated, timezone.utc).isoformat() if self.last_updated else None
         }
 
